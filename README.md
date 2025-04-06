@@ -152,8 +152,8 @@ docker-compose logs -f
 ```
 Content-type: application/x-tv-program-digital-info; charset=shift_jis
 version: 2
-station: サンプル放送
-station-id: 0001
+station: 0001
+station-name: サンプル放送
 service-id: 1024
 channel: 27
 type: GR

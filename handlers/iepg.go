@@ -94,8 +94,8 @@ func HandleIEPG(w http.ResponseWriter, r *http.Request, dbConn *sql.DB) {
 	// 簡易 iEPG 出力
 	iepg := "Content-type: application/x-tv-program-digital-info; charset=shift_jis\r\n"
 	iepg += "version: 2\r\n"
-	iepg += "station: " + stationName + "\r\n"
-	iepg += "station-id: " + stationId + "\r\n"
+	iepg += "station: " + stationId + "\r\n"
+	iepg += "station-name: " + stationName + "\r\n"
 	iepg += "service-id: " + strconv.FormatInt(serviceId, 10) + "\r\n"
 	iepg += "channel: " + channelNumber + "\r\n"
 	iepg += "type: " + channelType + "\r\n"
