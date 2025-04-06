@@ -1,16 +1,14 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /build
 
 # 必要なパッケージのインストール
 RUN apk add --no-cache gcc musl-dev
 
-# 依存関係コピー＆ダウンロード
-COPY go.mod go.sum ./
-RUN go mod download
-
-# ソースコードのコピー
+# ソースコードのコピーと依存関係の設定
 COPY . .
+RUN go mod tidy
+RUN go mod download
 
 # ビルド
 RUN CGO_ENABLED=1 GOOS=linux go build -a -o iepg-server .
