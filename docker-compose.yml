@@ -1,0 +1,27 @@
+version: '3'
+
+services:
+  iepg-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: iepg-server
+    restart: unless-stopped
+    ports:
+      - "40870:40870"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PORT=40870
+      - LOG_LEVEL=info
+      - DB_PATH=/app/data/programs.db
+      - MIRAKURUN_URL=http://mirakurun:40772/api
+      # 必要に応じて以下の環境変数を変更
+      # - SKIP_INITIAL_LOAD=0  # 初回起動時のプログラム情報読み込みをスキップ(1=スキップ)
+      # - ENABLE_CLEANUP=1     # 期限切れの番組情報のクリーンアップを有効/無効(0=無効)
+    networks:
+      - mirakurun-network
+
+networks:
+  mirakurun-network:
+    external: true  # Mirakurunが別のコンテナで動いていることを想定

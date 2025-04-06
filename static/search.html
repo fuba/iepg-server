@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>番組検索</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {},
+            },
+            plugins: [
+                function({ addUtilities }) {
+                    const newUtilities = {
+                        '.line-clamp-1': {
+                            display: '-webkit-box',
+                            '-webkit-line-clamp': '1',
+                            '-webkit-box-orient': 'vertical',
+                            overflow: 'hidden',
+                        },
+                        '.line-clamp-2': {
+                            display: '-webkit-box',
+                            '-webkit-line-clamp': '2',
+                            '-webkit-box-orient': 'vertical',
+                            overflow: 'hidden',
+                        },
+                        '.line-clamp-3': {
+                            display: '-webkit-box',
+                            '-webkit-line-clamp': '3',
+                            '-webkit-box-orient': 'vertical',
+                            overflow: 'hidden',
+                        },
+                    }
+                    addUtilities(newUtilities)
+                }
+            ],
+        }
+    </script>
+    <!-- flatpickrカレンダー -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ja.js"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <h1 class="text-2xl font-bold mb-6 text-gray-800">番組検索</h1>
+        
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <form id="searchForm" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="q" class="block text-sm font-medium text-gray-700 mb-1">検索キーワード</label>
+                        <input type="text" id="q" name="q" placeholder="番組名や説明文で検索" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label for="serviceId" class="block text-sm font-medium text-gray-700 mb-1">チャンネル</label>
+                        <select id="serviceId" name="serviceId" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="">すべてのチャンネル</option>
+                            <!-- チャンネルリストはJavaScriptで動的に挿入されます -->
+                        </select>
+                    </div>
+                    <div>
+                        <label for="dateTimeFrom" class="block text-sm font-medium text-gray-700 mb-1">開始時間(From)</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="dateTimeFrom" placeholder="カレンダーから選択" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                            <input type="hidden" id="startFrom" name="startFrom">
+                            <button type="button" id="setNowFrom" class="px-3 py-2 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none">
+                                現在
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="dateTimeTo" class="block text-sm font-medium text-gray-700 mb-1">開始時間(To)</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="dateTimeTo" placeholder="カレンダーから選択" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                            <input type="hidden" id="startTo" name="startTo">
+                            <button type="button" id="setNowTo" class="px-3 py-2 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none">
+                                現在
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="py-2">
+                    <p class="text-sm font-medium text-gray-700 mb-2">時間範囲</p>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" id="setToday" class="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-md hover:bg-blue-200">
+                            今日
+                        </button>
+                        <button type="button" id="setTomorrow" class="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-md hover:bg-blue-200">
+                            明日
+                        </button>
+                        <button type="button" id="setWeek" class="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-md hover:bg-blue-200">
+                            1週間
+                        </button>
+                        <button type="button" id="clearTime" class="px-3 py-1 bg-gray-100 text-gray-800 text-sm rounded-md hover:bg-gray-200">
+                            クリア
+                        </button>
+                    </div>
+                </div>
+                <div class="py-2">
+                    <p class="text-sm font-medium text-gray-700 mb-2">放送種別</p>
+                    <div class="flex flex-wrap gap-4">
+                        <label class="inline-flex items-center">
+                            <input type="radio" id="allChannels" name="channelFilter" value="all" class="form-radio h-4 w-4 text-indigo-600" checked>
+                            <span class="ml-2 text-sm text-gray-700">すべて</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="radio" id="terrestrialOnly" name="channelFilter" value="1" class="form-radio h-4 w-4 text-indigo-600">
+                            <span class="ml-2 text-sm text-gray-700">地上波のみ</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="radio" id="bsOnly" name="channelFilter" value="2" class="form-radio h-4 w-4 text-indigo-600">
+                            <span class="ml-2 text-sm text-gray-700">BSのみ</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="radio" id="csOnly" name="channelFilter" value="3" class="form-radio h-4 w-4 text-indigo-600">
+                            <span class="ml-2 text-sm text-gray-700">CSのみ</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        検索
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <div id="loading" class="hidden text-center py-4">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-600"></div>
+            <p class="mt-2 text-gray-600">検索中...</p>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="flex justify-between items-center px-6 py-4 border-b">
+                <h2 class="text-lg font-semibold text-gray-800">検索結果</h2>
+                <div id="resultsCount" class="text-sm text-gray-600"></div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">番組情報</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody" class="bg-white divide-y divide-gray-200">
+                        <!-- 結果がここに挿入されます -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // サービス一覧の取得と表示
+        async function loadServices() {
+            try {
+                // サービス一覧を取得（すべてのタイプ）
+                const response = await fetch('/services');
+                if (!response.ok) {
+                    throw new Error('サービス一覧の取得に失敗しました: ' + response.status);
+                }
+                const services = await response.json();
+                
+                // サービスセレクトボックスの構築
+                const selectEl = document.getElementById('serviceId');
+                
+                // サービスを種類ごとにグループ化
+                const serviceGroups = {
+                    1: [], // 地上波
+                    2: [], // BS
+                    3: []  // CS
+                };
+                
+                services.forEach(service => {
+                    if (serviceGroups[service.type]) {
+                        serviceGroups[service.type].push(service);
+                    }
+                });
+                
+                // サービスタイプごとにグループ化して表示
+                const typeLabels = {
+                    1: "地上波",
+                    2: "BS",
+                    3: "CS"
+                };
+                
+                // 各タイプをグループとして追加
+                Object.keys(serviceGroups).forEach(type => {
+                    if (serviceGroups[type] && serviceGroups[type].length > 0) {
+                        const groupEl = document.createElement('optgroup');
+                        groupEl.label = typeLabels[type] || `タイプ ${type}`;
+                        
+                        // サービスをリモコンキー順に並べ替え
+                        serviceGroups[type].sort((a, b) => {
+                            if (a.remoteControlKeyId > 0 && b.remoteControlKeyId > 0) {
+                                return a.remoteControlKeyId - b.remoteControlKeyId;
+                            }
+                            if (a.remoteControlKeyId > 0) return -1;
+                            if (b.remoteControlKeyId > 0) return 1;
+                            return a.serviceId - b.serviceId;
+                        });
+                        
+                        serviceGroups[type].forEach(service => {
+                            const optionEl = document.createElement('option');
+                            optionEl.value = service.serviceId;
+                            optionEl.dataset.type = service.type; // データ属性にタイプを保存
+                            
+                            // 表示名を構築 (リモコンキーID + 局名)
+                            let displayName = service.name;
+                            if (service.remoteControlKeyId > 0) {
+                                displayName = `${service.remoteControlKeyId}: ${service.name}`;
+                            }
+                            
+                            optionEl.textContent = displayName;
+                            groupEl.appendChild(optionEl);
+                        });
+                        
+                        selectEl.appendChild(groupEl);
+                    }
+                });
+                
+                console.log(`${services.length}件のサービスを読み込みました`);
+                
+                // 放送種別ラジオボタンの変更イベントを設定
+                setupChannelFilterEvents();
+                
+            } catch (error) {
+                console.error('サービス一覧の取得エラー:', error);
+            }
+        }
+        
+        // 放送種別でのフィルタリング
+        function setupChannelFilterEvents() {
+            document.querySelectorAll('input[name="channelFilter"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    filterChannelOptions();
+                });
+            });
+            
+            // 初期フィルタリングを適用
+            filterChannelOptions();
+        }
+        
+        // チャンネル選択肢のフィルタリング
+        function filterChannelOptions() {
+            const selectedFilter = document.querySelector('input[name="channelFilter"]:checked').value;
+            const selectEl = document.getElementById('serviceId');
+            
+            // 「すべて」の場合は全オプショングループを表示
+            if (selectedFilter === 'all') {
+                for (let i = 0; i < selectEl.children.length; i++) {
+                    if (selectEl.children[i].tagName === 'OPTGROUP') {
+                        selectEl.children[i].style.display = '';
+                    }
+                }
+                return;
+            }
+            
+            // 特定の放送種別のみ表示
+            for (let i = 0; i < selectEl.children.length; i++) {
+                const child = selectEl.children[i];
+                if (child.tagName === 'OPTGROUP') {
+                    // グループのラベルで判断
+                    if (child.label === '地上波' && selectedFilter === '1' ||
+                        child.label === 'BS' && selectedFilter === '2' ||
+                        child.label === 'CS' && selectedFilter === '3') {
+                        child.style.display = '';
+                    } else {
+                        child.style.display = 'none';
+                    }
+                }
+            }
+            
+            // 現在選択されているオプションが非表示なら、表示されている最初のオプションを選択
+            const visibleOptions = [...selectEl.options].filter(opt => {
+                if (opt.value === '') return true; // 「すべてのチャンネル」は常に表示
+                const optGroup = opt.parentNode;
+                return optGroup.style.display !== 'none';
+            });
+            
+            if (visibleOptions.length > 0 && !visibleOptions.includes(selectEl.options[selectEl.selectedIndex])) {
+                selectEl.value = visibleOptions[0].value;
+            }
+        }
+        
+        // 初期化時にサービス一覧を読み込み
+        document.addEventListener('DOMContentLoaded', loadServices);
+        
+        // flatpickrの初期化
+        const flatpickrOptions = {
+            enableTime: true,
+            dateFormat: "Y/m/d H:i",
+            locale: "ja",
+            time_24hr: true,
+            onChange: function(selectedDates, dateStr, instance) {
+                if (instance.element.id === 'dateTimeFrom') {
+                    document.getElementById('startFrom').value = selectedDates[0].getTime();
+                } else if (instance.element.id === 'dateTimeTo') {
+                    document.getElementById('startTo').value = selectedDates[0].getTime();
+                }
+            }
+        };
+        
+        const dateTimeFromPicker = flatpickr("#dateTimeFrom", flatpickrOptions);
+        const dateTimeToPicker = flatpickr("#dateTimeTo", flatpickrOptions);
+        
+        // 時刻を日付形式に表示する関数
+        function updateDateTimeDisplay(timestamp, elementId) {
+            if (timestamp) {
+                const date = new Date(parseInt(timestamp));
+                if (elementId === 'dateTimeFrom') {
+                    dateTimeFromPicker.setDate(date);
+                } else if (elementId === 'dateTimeTo') {
+                    dateTimeToPicker.setDate(date);
+                }
+            }
+        }
+        
+        // 現在時刻ボタンの設定
+        document.getElementById('setNowFrom').addEventListener('click', function() {
+            const now = Date.now();
+            document.getElementById('startFrom').value = now;
+            updateDateTimeDisplay(now, 'dateTimeFrom');
+        });
+        
+        document.getElementById('setNowTo').addEventListener('click', function() {
+            const now = Date.now();
+            document.getElementById('startTo').value = now;
+            updateDateTimeDisplay(now, 'dateTimeTo');
+        });
+        
+        // 日付範囲ボタンの設定
+        document.getElementById('setToday').addEventListener('click', function() {
+            const now = new Date();
+            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
+            const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).getTime();
+            
+            document.getElementById('startFrom').value = startOfDay;
+            document.getElementById('startTo').value = endOfDay;
+            
+            updateDateTimeDisplay(startOfDay, 'dateTimeFrom');
+            updateDateTimeDisplay(endOfDay, 'dateTimeTo');
+        });
+        
+        document.getElementById('setTomorrow').addEventListener('click', function() {
+            const now = new Date();
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
+            const startOfDay = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 0, 0, 0).getTime();
+            const endOfDay = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59).getTime();
+            
+            document.getElementById('startFrom').value = startOfDay;
+            document.getElementById('startTo').value = endOfDay;
+            
+            updateDateTimeDisplay(startOfDay, 'dateTimeFrom');
+            updateDateTimeDisplay(endOfDay, 'dateTimeTo');
+        });
+        
+        document.getElementById('setWeek').addEventListener('click', function() {
+            const now = new Date();
+            const nextWeek = new Date(now);
+            nextWeek.setDate(nextWeek.getDate() + 7);
+            
+            const currentTime = now.getTime();
+            const nextWeekTime = nextWeek.getTime();
+            
+            document.getElementById('startFrom').value = currentTime;
+            document.getElementById('startTo').value = nextWeekTime;
+            
+            updateDateTimeDisplay(currentTime, 'dateTimeFrom');
+            updateDateTimeDisplay(nextWeekTime, 'dateTimeTo');
+        });
+        
+        document.getElementById('clearTime').addEventListener('click', function() {
+            document.getElementById('startFrom').value = '';
+            document.getElementById('startTo').value = '';
+            dateTimeFromPicker.clear();
+            dateTimeToPicker.clear();
+        });
+        
+        document.getElementById('searchForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // 検索パラメータの取得
+            const q = document.getElementById('q').value;
+            const serviceId = document.getElementById('serviceId').value;
+            const startFrom = document.getElementById('startFrom').value;
+            const startTo = document.getElementById('startTo').value;
+            
+            // URLパラメータの構築
+            let params = new URLSearchParams();
+            if (q) params.append('q', q);
+            if (serviceId) params.append('serviceId', serviceId);
+            if (startFrom) params.append('startFrom', startFrom);
+            if (startTo) params.append('startTo', startTo);
+            
+            // ローディング表示
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('resultsBody').innerHTML = '';
+            document.getElementById('resultsCount').textContent = '';
+            
+            // APIリクエスト
+            fetch('/search?' + params.toString())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('検索に失敗しました: ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    document.getElementById('loading').classList.add('hidden');
+                    
+                    // 結果件数の表示
+                    document.getElementById('resultsCount').textContent = `${data.length}件の番組が見つかりました`;
+                    
+                    // テーブルに結果を追加
+                    const tbody = document.getElementById('resultsBody');
+                    tbody.innerHTML = '';
+                    
+                    data.forEach(program => {
+                        const row = document.createElement('tr');
+                        
+                        // 日時のフォーマット
+                        const startDate = new Date(program.startAt);
+                        const endDate = new Date(program.startAt + program.duration);
+                        const formatDate = date => {
+                            return date.toLocaleDateString('ja-JP') + ' ' + 
+                                   date.toLocaleTimeString('ja-JP');
+                        };
+                        
+                        // 2行で構成するために親要素となる DocumentFragment を作成
+                        const fragment = document.createDocumentFragment();
+                        
+                        // 1行目 - ID列とタイトル情報
+                        const row1 = document.createElement('tr');
+                        row1.innerHTML = `
+                            <td class="px-6 py-2 align-top whitespace-nowrap text-sm text-gray-900 truncate" rowspan="2">
+                                <a href="/program/${program.id}" class="text-indigo-600 hover:text-indigo-900 hover:underline" target="_blank">${program.id}</a>
+                            </td>
+                            <td class="px-3 py-2 text-sm">
+                                <div class="flex flex-wrap items-center">
+                                    <div class="w-40 font-medium text-gray-700" title="${escapeHtml(program.stationName || `Service ${program.serviceId}`)}">
+                                        ${escapeHtml(program.stationName || `Service ${program.serviceId}`)}
+                                    </div>
+                                    <div class="flex-1 font-medium text-gray-900 truncate" title="${escapeHtml(program.name)}">
+                                        ${escapeHtml(program.name)}
+                                    </div>
+                                    <div class="ml-4 whitespace-nowrap text-sm text-gray-600">
+                                        ${formatDate(startDate)} 〜 ${formatDate(endDate)}
+                                    </div>
+                                </div>
+                            </td>
+                        `;
+                        fragment.appendChild(row1);
+                        
+                        // 2行目 - 説明文
+                        const row2 = document.createElement('tr');
+                        row2.className = "bg-gray-50";
+                        row2.innerHTML = `
+                            <td class="px-3 py-2 text-sm text-gray-500">
+                                <div class="break-words">
+                                    ${escapeHtml(program.description || '説明なし')}
+                                </div>
+                            </td>
+                        `;
+                        fragment.appendChild(row2);
+                        
+                        // fragmentを直接tbodyに追加
+                        tbody.appendChild(fragment);
+                    });
+                    
+                    if (data.length === 0) {
+                        const emptyRow = document.createElement('tr');
+                        emptyRow.innerHTML = '<td colspan="2" class="px-6 py-4 text-sm text-center text-gray-500">該当する番組は見つかりませんでした</td>';
+                        tbody.appendChild(emptyRow);
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('resultsCount').textContent = 'エラー: ' + error.message;
+                    console.error('検索エラー:', error);
+                });
+        });
+        
+        // HTMLエスケープ関数
+        function escapeHtml(unsafe) {
+            if (!unsafe) return '';
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,217 @@
+openapi: 3.0.0
+info:
+  title: IEPG Server API
+  description: テレビ番組情報検索・取得APIとIEPG形式での提供
+  version: 1.0.0
+  license:
+    name: MIT
+servers:
+  - url: 'http://localhost:40870'
+    description: 開発サーバー
+tags:
+  - name: programs
+    description: 番組情報
+  - name: services
+    description: サービス情報（チャンネル）
+paths:
+  /search:
+    get:
+      summary: 番組検索
+      description: 条件に一致する番組を検索します
+      tags:
+        - programs
+      parameters:
+        - name: q
+          in: query
+          description: 検索キーワード（番組名や説明文に含まれるテキスト）
+          required: false
+          schema:
+            type: string
+        - name: serviceId
+          in: query
+          description: サービスID（チャンネルのID）
+          required: false
+          schema:
+            type: integer
+        - name: startFrom
+          in: query
+          description: 開始時間の下限（UNIXタイムスタンプ、ミリ秒）
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: startTo
+          in: query
+          description: 開始時間の上限（UNIXタイムスタンプ、ミリ秒）
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 番組情報の配列
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Program'
+        '400':
+          description: 不正なリクエストパラメータ
+        '500':
+          description: サーバーエラー
+  /services:
+    get:
+      summary: サービス一覧
+      description: 利用可能なサービス（チャンネル）の一覧を取得します
+      tags:
+        - services
+      responses:
+        '200':
+          description: サービス情報の配列
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Service'
+        '500':
+          description: サーバーエラー
+  /program/{id}:
+    get:
+      summary: IEPG形式の番組情報取得
+      description: 指定されたIDの番組情報をIEPG形式で取得します
+      tags:
+        - programs
+      parameters:
+        - name: id
+          in: path
+          description: 番組ID
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: IEPG形式の番組情報
+          content:
+            application/x-tv-program-digital-info:
+              schema:
+                type: string
+                example: |-
+                  Content-type: application/x-tv-program-digital-info; charset=shift_jis
+                  version: 2
+                  station: サンプル放送
+                  station-id: 0001
+                  service-id: 1024
+                  channel: 27
+                  type: GR
+                  year: 2023
+                  month: 04
+                  date: 15
+                  start: 12:00
+                  end: 12:30
+                  program-title: サンプル番組
+                  program-id: 1234
+                  
+                  これは番組の説明です。
+        '400':
+          description: 不正なリクエストパラメータ
+        '404':
+          description: 指定されたIDの番組が見つかりません
+        '500':
+          description: サーバーエラー
+  /ui/search:
+    get:
+      summary: 検索UI
+      description: ブラウザで利用する検索インターフェース
+      tags:
+        - ui
+      responses:
+        '200':
+          description: 検索UI（HTML）
+          content:
+            text/html:
+              schema:
+                type: string
+components:
+  schemas:
+    Program:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 番組ID
+        serviceId:
+          type: integer
+          format: int64
+          description: サービスID
+        startAt:
+          type: integer
+          format: int64
+          description: 開始時間（UNIXタイムスタンプ、ミリ秒）
+        duration:
+          type: integer
+          format: int64
+          description: 番組の長さ（ミリ秒）
+        name:
+          type: string
+          description: 番組名
+        description:
+          type: string
+          description: 番組説明
+        stationId:
+          type: string
+          description: 放送局ID（文字列形式）
+        stationName:
+          type: string
+          description: 放送局名
+        channelType:
+          type: string
+          description: チャンネルタイプ（GR、BS、CSなど）
+        channelNumber:
+          type: string
+          description: チャンネル番号
+        remoteControlKey:
+          type: integer
+          description: リモコンキー番号
+    Service:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID
+        serviceId:
+          type: integer
+          format: int64
+          description: サービスID
+        networkId:
+          type: integer
+          format: int64
+          description: ネットワークID
+        name:
+          type: string
+          description: 放送局名
+        type:
+          type: integer
+          description: タイプ（1=地上波, 2=BS, 3=CS）
+        logoId:
+          type: integer
+          description: ロゴID
+        hasLogoData:
+          type: boolean
+          description: ロゴデータの有無
+        remoteControlKeyId:
+          type: integer
+          description: リモコンキー番号
+        channelType:
+          type: string
+          description: チャンネルタイプ（GR、BS、CSなど）
+        channelNumber:
+          type: string
+          description: チャンネル番号
+        channelName:
+          type: string
+          description: チャンネル名
