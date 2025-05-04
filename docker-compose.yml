@@ -5,17 +5,12 @@ services:
       dockerfile: Dockerfile
     container_name: iepg-server
     restart: unless-stopped
-    ports:
-      - "40870:40870"
+    network_mode: "host"
     volumes:
       - ./data:/app/data
     environment:
       - PORT=40870
-      - LOG_LEVEL=info
+      - LOG_LEVEL=debug
       - DB_PATH=/app/data/programs.db
-      - MIRAKURUN_URL=http://host.docker.internal:40772/api
-      # 必要に応じて以下の環境変数を変更
-      # - SKIP_INITIAL_LOAD=0  # 初回起動時のプログラム情報読み込みをスキップ(1=スキップ)
-      # - ENABLE_CLEANUP=1     # 期限切れの番組情報のクリーンアップを有効/無効(0=無効)
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - MIRAKURUN_URL=http://localhost:40772/api
+      - RECREATE_DB=true  # 起動のたびにデータベースを再作成

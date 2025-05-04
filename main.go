@@ -30,6 +30,19 @@ func main() {
 	}
 	models.Log.Debug("Using database path: %s", dbPath)
 
+	// RECREATE_DB環境変数が設定されているかチェック
+	recreateDB := os.Getenv("RECREATE_DB")
+	if recreateDB == "1" || recreateDB == "true" {
+		// データベースファイルが存在する場合は削除
+		if _, err := os.Stat(dbPath); err == nil {
+			models.Log.Info("Removing existing database file before initialization")
+			if err := os.Remove(dbPath); err != nil {
+				models.Log.Error("Failed to remove existing database: %v", err)
+				log.Fatal(err)
+			}
+		}
+	}
+
 	dbConn, err := db.InitDB(dbPath)
 	if err != nil {
 		models.Log.Error("Failed to initialize database: %v", err)
