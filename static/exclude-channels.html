@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>チャンネル除外設定</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {},
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-8 max-w-5xl">
+        <header class="mb-6">
+            <h1 class="text-2xl font-bold text-gray-800">チャンネル除外設定</h1>
+            <p class="text-gray-600 mt-2">検索結果に表示したくないチャンネルを除外できます</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- 左側: 利用可能なチャンネル一覧 -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">チャンネル一覧</h2>
+                <div class="mb-4">
+                    <div class="relative">
+                        <input type="text" id="channelSearch" placeholder="チャンネル名で検索..." 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        <span class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400">
+                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                            </svg>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" data-type="all" class="filter-btn px-3 py-1 bg-indigo-600 text-white text-sm rounded-md">
+                            すべて
+                        </button>
+                        <button type="button" data-type="1" class="filter-btn px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded-md">
+                            地上波
+                        </button>
+                        <button type="button" data-type="2" class="filter-btn px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded-md">
+                            BS
+                        </button>
+                        <button type="button" data-type="3" class="filter-btn px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded-md">
+                            CS
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="overflow-y-auto max-h-96 border border-gray-200 rounded-md">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">サービスID</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">チャンネル名</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">種別</th>
+                                <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="channelList" class="bg-white divide-y divide-gray-200">
+                            <!-- チャンネル一覧がここに動的に挿入されます -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-4 text-sm text-gray-500" id="channelCount">
+                    <!-- チャンネル数がここに表示されます -->
+                </div>
+            </div>
+
+            <!-- 右側: 除外チャンネル一覧 -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">除外中のチャンネル</h2>
+
+                <div class="overflow-y-auto max-h-96 border border-gray-200 rounded-md mb-4">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">サービスID</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">チャンネル名</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">種別</th>
+                                <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="excludedList" class="bg-white divide-y divide-gray-200">
+                            <!-- 除外チャンネル一覧がここに動的に挿入されます -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-4 text-sm text-gray-500" id="excludedCount">
+                    <!-- 除外チャンネル数がここに表示されます -->
+                </div>
+
+                <div class="mt-6 flex flex-col sm:flex-row sm:justify-between">
+                    <a href="/ui/search" class="text-indigo-600 hover:text-indigo-800 mb-2 sm:mb-0">
+                        検索画面に戻る
+                    </a>
+                    <button id="clearAllExcludes" class="px-4 py-2 bg-red-600 text-white font-medium rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                        すべての除外を解除
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知トースト -->
+    <div id="toast" class="fixed bottom-4 right-4 px-4 py-2 bg-green-500 text-white rounded-md shadow-lg transition-opacity duration-300 opacity-0 pointer-events-none">
+        設定を保存しました
+    </div>
+
+    <script>
+        // DOMロード時の処理
+        document.addEventListener('DOMContentLoaded', function() {
+            // フィルタボタンのイベント設定
+            setupFilterButtons();
+            
+            // チャンネル検索機能のイベント設定
+            setupChannelSearch();
+
+            // すべての除外を解除するボタンのイベント設定
+            document.getElementById('clearAllExcludes').addEventListener('click', clearAllExcludes);
+            
+            // 初期データの読み込み
+            loadAllData();
+        });
+        
+        // フィルタボタンの設定
+        function setupFilterButtons() {
+            const filterButtons = document.querySelectorAll('.filter-btn');
+            filterButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    // アクティブなボタンのスタイルを変更
+                    filterButtons.forEach(btn => {
+                        btn.classList.remove('bg-indigo-600', 'text-white');
+                        btn.classList.add('bg-gray-200', 'text-gray-700');
+                    });
+                    this.classList.remove('bg-gray-200', 'text-gray-700');
+                    this.classList.add('bg-indigo-600', 'text-white');
+                    
+                    // チャンネル一覧をフィルタリング
+                    filterChannelsByType(this.dataset.type);
+                });
+            });
+        }
+        
+        // チャンネル検索のセットアップ
+        function setupChannelSearch() {
+            const searchInput = document.getElementById('channelSearch');
+            searchInput.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                filterChannelsByName(searchTerm);
+            });
+        }
+        
+        // すべてのデータを読み込む
+        async function loadAllData() {
+            try {
+                await Promise.all([
+                    loadChannelList(),
+                    loadExcludedList()
+                ]);
+                console.log("すべてのデータを読み込みました");
+            } catch (error) {
+                console.error("データの読み込みに失敗しました:", error);
+            }
+        }
+        
+        // サービス一覧の読み込み
+        async function loadChannelList() {
+            try {
+                const response = await fetch('/services/all');
+                if (!response.ok) {
+                    throw new Error('サービス一覧の取得に失敗しました: ' + response.status);
+                }
+                
+                const services = await response.json();
+                const tableBody = document.getElementById('channelList');
+                tableBody.innerHTML = '';
+                
+                // チャンネルタイプのラベル
+                const typeLabels = {
+                    1: "地上波",
+                    2: "BS",
+                    3: "CS"
+                };
+                
+                // サービスIDでソート
+                services.sort((a, b) => {
+                    return a.serviceId - b.serviceId;
+                });
+                
+                services.forEach(service => {
+                    const row = document.createElement('tr');
+                    row.dataset.serviceId = service.serviceId;
+                    row.dataset.serviceType = service.type;
+                    row.dataset.serviceName = service.name;
+                    
+                    // 除外済みの場合はクラスを追加
+                    if (service.isExcluded) {
+                        row.classList.add('bg-gray-100');
+                    }
+                    
+                    // リモコンキーがある場合は表示名に含める
+                    let displayName = service.name;
+                    if (service.remoteControlKeyId > 0) {
+                        displayName = `${service.remoteControlKeyId}: ${service.name}`;
+                    }
+                    
+                    // テキストの色を決定（グレーアウトするかどうか）
+                    const textColorClass = service.isExcluded ? 'text-gray-400' : 'text-gray-900';
+                    const textColorClassLabel = service.isExcluded ? 'text-gray-400' : 'text-gray-500';
+                    
+                    row.innerHTML = `
+                        <td class="px-4 py-2 text-sm ${textColorClass}">${service.serviceId}</td>
+                        <td class="px-4 py-2 text-sm ${textColorClass} font-medium">${displayName}</td>
+                        <td class="px-4 py-2 text-sm ${textColorClassLabel}">${typeLabels[service.type] || '-'}</td>
+                        <td class="px-4 py-2 text-sm text-right">
+                            ${service.isExcluded ? 
+                                `<span class="px-3 py-1 bg-gray-200 text-gray-500 rounded inline-block">除外済み</span>` : 
+                                `<button class="exclude-btn px-3 py-1 bg-red-100 text-red-800 rounded hover:bg-red-200" 
+                                    data-service-id="${service.serviceId}" data-service-name="${service.name}">
+                                    除外
+                                </button>`
+                            }
+                        </td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                });
+                
+                // 「除外」ボタンにイベント設定
+                document.querySelectorAll('.exclude-btn').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const serviceId = parseInt(this.dataset.serviceId);
+                        const serviceName = this.dataset.serviceName;
+                        excludeChannel(serviceId, serviceName);
+                    });
+                });
+                
+                // チャンネル数を表示
+                document.getElementById('channelCount').textContent = `${services.length}件のチャンネルが見つかりました`;
+                
+                console.log(`${services.length}件のチャンネルを読み込みました`);
+                return services;
+                
+            } catch (error) {
+                console.error('チャンネル一覧の取得エラー:', error);
+                document.getElementById('channelCount').textContent = 'エラー: データの取得に失敗しました';
+                return [];
+            }
+        }
+        
+        // 除外チャンネル一覧の読み込み
+        async function loadExcludedList() {
+            try {
+                const response = await fetch('/services/excluded');
+                if (!response.ok) {
+                    throw new Error('除外チャンネル一覧の取得に失敗しました: ' + response.status);
+                }
+                
+                const excludedServices = await response.json();
+                updateExcludedTable(excludedServices);
+                
+                console.log(`${excludedServices.length}件の除外チャンネルを読み込みました`);
+                return excludedServices;
+                
+            } catch (error) {
+                console.error('除外チャンネル一覧の取得エラー:', error);
+                document.getElementById('excludedCount').textContent = 'エラー: データの取得に失敗しました';
+                return [];
+            }
+        }
+        
+        // 除外チャンネルテーブルの更新
+        function updateExcludedTable(excludedServices) {
+            const tableBody = document.getElementById('excludedList');
+            tableBody.innerHTML = '';
+            
+            // チャンネルタイプのラベル
+            const typeLabels = {
+                1: "地上波",
+                2: "BS",
+                3: "CS"
+            };
+            
+            if (excludedServices.length === 0) {
+                const emptyRow = document.createElement('tr');
+                emptyRow.innerHTML = `
+                    <td colspan="4" class="px-4 py-4 text-sm text-gray-500 text-center">
+                        除外チャンネルはありません
+                    </td>
+                `;
+                tableBody.appendChild(emptyRow);
+            } else {
+                excludedServices.forEach(service => {
+                    const row = document.createElement('tr');
+                    row.dataset.serviceId = service.serviceId;
+                    
+                    // リモコンキーがある場合は表示名に含める
+                    let displayName = service.name;
+                    if (service.remoteControlKeyId > 0) {
+                        displayName = `${service.remoteControlKeyId}: ${service.name}`;
+                    }
+                    
+                    // タイプとチャンネル情報の表示を作成
+                    let typeDisplay = typeLabels[service.type] || '-';
+                    if (service.channelType) {
+                        typeDisplay += ` (${service.channelType}`;
+                        if (service.channelNumber) {
+                            typeDisplay += ` ${service.channelNumber}`;
+                        }
+                        typeDisplay += ')';
+                    }
+                    
+                    row.innerHTML = `
+                        <td class="px-4 py-2 text-sm text-gray-900">${service.serviceId}</td>
+                        <td class="px-4 py-2 text-sm text-gray-900 font-medium">${displayName}</td>
+                        <td class="px-4 py-2 text-sm text-gray-500">${typeDisplay}</td>
+                        <td class="px-4 py-2 text-sm text-right">
+                            <button class="unexclude-btn px-3 py-1 bg-gray-100 text-gray-800 rounded hover:bg-gray-200" 
+                                data-service-id="${service.serviceId}">
+                                解除
+                            </button>
+                        </td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                });
+                
+                // 「解除」ボタンにイベント設定
+                document.querySelectorAll('.unexclude-btn').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const serviceId = parseInt(this.dataset.serviceId);
+                        unexcludeChannel(serviceId);
+                    });
+                });
+            }
+            
+            // 除外チャンネル数を表示
+            document.getElementById('excludedCount').textContent = `${excludedServices.length}件のチャンネルを除外中`;
+        }
+        
+        // チャンネルを除外リストに追加
+        async function excludeChannel(serviceId, serviceName) {
+            try {
+                const response = await fetch('/services/exclude', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        serviceId: serviceId,
+                        name: serviceName
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('チャンネルの除外に失敗しました: ' + response.status);
+                }
+                
+                // 成功したら両方のリストを再読み込み
+                await loadAllData();
+                showToast('チャンネルを除外リストに追加しました');
+                
+            } catch (error) {
+                console.error('チャンネル除外エラー:', error);
+                showToast('エラー: チャンネルの除外に失敗しました', true);
+            }
+        }
+        
+        // チャンネルの除外を解除
+        async function unexcludeChannel(serviceId) {
+            try {
+                const response = await fetch('/services/unexclude', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        serviceId: serviceId
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('チャンネルの除外解除に失敗しました: ' + response.status);
+                }
+                
+                // 成功したら両方のリストを再読み込み
+                await loadAllData();
+                showToast('チャンネルの除外を解除しました');
+                
+            } catch (error) {
+                console.error('チャンネル除外解除エラー:', error);
+                showToast('エラー: チャンネルの除外解除に失敗しました', true);
+            }
+        }
+        
+        // すべての除外を解除
+        async function clearAllExcludes() {
+            if (!confirm('すべてのチャンネルの除外設定を解除します。よろしいですか？')) {
+                return;
+            }
+            
+            try {
+                // 除外されているすべてのチャンネルを取得
+                const response = await fetch('/services/excluded');
+                if (!response.ok) {
+                    throw new Error('除外チャンネル一覧の取得に失敗しました: ' + response.status);
+                }
+                
+                const excludedServices = await response.json();
+                if (excludedServices.length === 0) {
+                    showToast('除外しているチャンネルはありません');
+                    return;
+                }
+                
+                // すべての除外を解除
+                const promises = excludedServices.map(service => 
+                    fetch('/services/unexclude', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            serviceId: service.serviceId
+                        })
+                    })
+                );
+                
+                await Promise.all(promises);
+                
+                // 成功したら両方のリストを再読み込み
+                await loadAllData();
+                showToast('すべてのチャンネルの除外を解除しました');
+                
+            } catch (error) {
+                console.error('すべての除外解除エラー:', error);
+                showToast('エラー: 一部のチャンネルの除外解除に失敗しました', true);
+            }
+        }
+        
+        // 種別でチャンネルをフィルタリング
+        function filterChannelsByType(type) {
+            const rows = document.querySelectorAll('#channelList tr');
+            
+            rows.forEach(row => {
+                const serviceType = row.dataset.serviceType;
+                
+                // 「すべて」が選択されているか、選択された種別と一致するかで表示・非表示を切り替え
+                if (type === 'all' || (serviceType === type)) {
+                    row.classList.remove('hidden');
+                } else {
+                    row.classList.add('hidden');
+                }
+            });
+            
+            // 表示されている行数をカウント
+            const visibleCount = document.querySelectorAll('#channelList tr:not(.hidden)').length;
+            document.getElementById('channelCount').textContent = `${visibleCount}件のチャンネルが表示されています`;
+        }
+        
+        // 名前でチャンネルをフィルタリング
+        function filterChannelsByName(searchTerm) {
+            const rows = document.querySelectorAll('#channelList tr');
+            
+            rows.forEach(row => {
+                const serviceName = row.dataset.serviceName.toLowerCase();
+                const serviceId = row.dataset.serviceId;
+                
+                // 検索語が空か、名前かサービスIDに含まれるかで表示・非表示を切り替え
+                if (searchTerm === '' || 
+                    serviceName.includes(searchTerm) || 
+                    serviceId.includes(searchTerm)) {
+                    row.classList.remove('hidden-by-search');
+                } else {
+                    row.classList.add('hidden-by-search');
+                }
+            });
+            
+            // 表示されている行数をカウント（種別フィルタと検索の両方を考慮）
+            const visibleCount = document.querySelectorAll('#channelList tr:not(.hidden):not(.hidden-by-search)').length;
+            document.getElementById('channelCount').textContent = `${visibleCount}件のチャンネルが表示されています`;
+        }
+        
+        // トースト通知を表示
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            
+            // エラーの場合は赤背景、そうでなければ緑背景
+            if (isError) {
+                toast.classList.remove('bg-green-500');
+                toast.classList.add('bg-red-500');
+            } else {
+                toast.classList.remove('bg-red-500');
+                toast.classList.add('bg-green-500');
+            }
+            
+            // 表示
+            toast.classList.remove('opacity-0');
+            toast.classList.add('opacity-100');
+            
+            // 3秒後に非表示
+            setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

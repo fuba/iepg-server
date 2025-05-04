@@ -30,19 +30,6 @@ func main() {
 	}
 	models.Log.Debug("Using database path: %s", dbPath)
 
-	// RECREATE_DB環境変数が設定されているかチェック
-	recreateDB := os.Getenv("RECREATE_DB")
-	if recreateDB == "1" || recreateDB == "true" {
-		// データベースファイルが存在する場合は削除
-		if _, err := os.Stat(dbPath); err == nil {
-			models.Log.Info("Removing existing database file before initialization")
-			if err := os.Remove(dbPath); err != nil {
-				models.Log.Error("Failed to remove existing database: %v", err)
-				log.Fatal(err)
-			}
-		}
-	}
-
 	dbConn, err := db.InitDB(dbPath)
 	if err != nil {
 		models.Log.Error("Failed to initialize database: %v", err)
@@ -114,7 +101,27 @@ func main() {
 	})
 	http.HandleFunc("/services", func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Handling services request: %s", r.URL.String())
-		handlers.HandleGetServices(w, r)
+		handlers.HandleGetServices(w, r, dbConn)
+	})
+	http.HandleFunc("/services/all", func(w http.ResponseWriter, r *http.Request) {
+		models.Log.Debug("Handling all services request: %s", r.URL.String())
+		handlers.HandleGetAllServices(w, r, dbConn)
+	})
+	http.HandleFunc("/services/searchable", func(w http.ResponseWriter, r *http.Request) {
+		models.Log.Debug("Handling searchable services request: %s", r.URL.String())
+		handlers.HandleGetSearchableServices(w, r, dbConn)
+	})
+	http.HandleFunc("/services/excluded", func(w http.ResponseWriter, r *http.Request) {
+		models.Log.Debug("Handling excluded services request: %s", r.URL.String())
+		handlers.HandleGetExcludedServices(w, r, dbConn)
+	})
+	http.HandleFunc("/services/exclude", func(w http.ResponseWriter, r *http.Request) {
+		models.Log.Debug("Handling add excluded service request: %s", r.URL.String())
+		handlers.HandleAddExcludedService(w, r, dbConn)
+	})
+	http.HandleFunc("/services/unexclude", func(w http.ResponseWriter, r *http.Request) {
+		models.Log.Debug("Handling remove excluded service request: %s", r.URL.String())
+		handlers.HandleRemoveExcludedService(w, r, dbConn)
 	})
 	http.HandleFunc("/program/", func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Handling IEPG request: %s", r.URL.String())
@@ -140,6 +147,12 @@ func main() {
 	http.HandleFunc("/ui/search", func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Serving search UI")
 		http.ServeFile(w, r, "./static/search.html")
+	})
+
+	// チャンネル除外設定UI
+	http.HandleFunc("/ui/exclude-channels", func(w http.ResponseWriter, r *http.Request) {
+		models.Log.Debug("Serving exclude channels UI")
+		http.ServeFile(w, r, "./static/exclude-channels.html")
 	})
 
 	models.Log.Debug("HTTP endpoints registered")

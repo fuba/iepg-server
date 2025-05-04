@@ -21,6 +21,9 @@ type Service struct {
 	ChannelNumber  string `json:"channelNumber,omitempty"`
 	ChannelName    string `json:"channelName,omitempty"`
 	ChannelTSMFRel int    `json:"channelTsmfRelTs,omitempty"`
+	
+	// 除外フラグ（UI表示用）
+	IsExcluded     bool   `json:"isExcluded,omitempty"`
 }
 
 // ChannelInfo はMirakurunから取得するChannel情報の構造体
@@ -83,6 +86,27 @@ func (sm *ServiceMap) GetAll() []*Service {
 		result = append(result, service)
 	}
 	return result
+}
+
+// ExcludedService は除外チャンネルの情報を表す構造体
+type ExcludedService struct {
+	ServiceID          int64  `json:"serviceId"`
+	Name               string `json:"name"`
+	CreatedAt          int64  `json:"createdAt"`
+	Type               int    `json:"type"`               // 1=地上波、2=BS、3=CS
+	NetworkID          int64  `json:"networkId"`          // ネットワークID
+	RemoteControlKeyID int    `json:"remoteControlKeyId"` // リモコンキーID
+	ChannelType        string `json:"channelType"`        // "GR", "BS", "CS"など
+	ChannelNumber      string `json:"channelNumber"`      // チャンネル番号
+}
+
+// SearchableService は検索対象となるチャンネルの簡易情報を表す構造体
+type SearchableService struct {
+	ServiceID    int64  `json:"serviceId"`
+	Name         string `json:"name"`        // 表示用の名前（リモコンキー含む）
+	Type         int    `json:"type"`        // 1=地上波、2=BS、3=CS
+	TypeName     string `json:"typeName"`    // "地上波"、"BS"、"CS"など
+	ChannelType  string `json:"channelType"` // "GR", "BS", "CS"など
 }
 
 // ServiceMapInstance はグローバルに使用するServiceMapのインスタンス

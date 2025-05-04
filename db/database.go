@@ -6,8 +6,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -16,7 +18,7 @@ import (
 	"github.com/fuba/iepg-server/models"
 )
 
-// InitDB は、programsテーブルを作成する。
+// InitDB は、programsテーブルと除外チャンネルテーブルを作成する。
 func InitDB(dataSourceName string) (*sql.DB, error) {
 	models.Log.Debug("InitDB: Connecting to database: %s", dataSourceName)
 	db, err := sql.Open("sqlite3", dataSourceName)
@@ -41,6 +43,20 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 	`)
 	if err != nil {
 		models.Log.Error("InitDB: Failed to create programs table: %v", err)
+		db.Close()
+		return nil, err
+	}
+
+	// 除外チャンネルテーブルの作成
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS excluded_services (
+			serviceId     INTEGER PRIMARY KEY,
+			name          TEXT,
+			createdAt     INTEGER
+		);
+	`)
+	if err != nil {
+		models.Log.Error("InitDB: Failed to create excluded_services table: %v", err)
 		db.Close()
 		return nil, err
 	}
@@ -288,6 +304,24 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64, c
 		models.Log.Debug("SearchPrograms: Using regular query without search terms")
 	}
 
+	// 除外チャンネルのリストを取得
+	excludedServiceIds := make(map[int64]bool)
+	rows, err := db.Query("SELECT serviceId FROM excluded_services")
+	if err != nil {
+		models.Log.Error("SearchPrograms: Failed to get excluded services: %v", err)
+	} else {
+		defer rows.Close()
+		for rows.Next() {
+			var serviceId int64
+			if err := rows.Scan(&serviceId); err != nil {
+				models.Log.Error("SearchPrograms: Failed to scan excluded service: %v", err)
+				continue
+			}
+			excludedServiceIds[serviceId] = true
+		}
+	}
+	models.Log.Debug("SearchPrograms: Loaded %d excluded services", len(excludedServiceIds))
+
 	// 放送種別でフィルタリング
 	if channelType > 0 && channelType <= 3 {
 		// 指定された放送種別に該当するサービスIDのリストを取得
@@ -301,6 +335,13 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64, c
 		}
 		
 		for _, service := range services {
+			// 除外リストにあるサービスIDはスキップ
+			if excludedServiceIds[service.ServiceID] {
+				models.Log.Debug("SearchPrograms: Skipping excluded service: %d (%s)", 
+					service.ServiceID, service.Name)
+				continue
+			}
+			
 			if service.Type == channelType {
 				serviceIDs = append(serviceIDs, service.ServiceID)
 				models.Log.Debug("SearchPrograms: Added service to filter: ServiceID=%d, Name=%s, Type=%d", 
@@ -319,6 +360,17 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64, c
 				channelType, len(serviceIDs))
 		} else {
 			models.Log.Debug("SearchPrograms: No services found for channel type: %d, services may not be loaded yet", channelType)
+		}
+	} else if serviceId == 0 {
+		// 特定のサービスIDが指定されていない場合は、除外チャンネルを反映
+		if len(excludedServiceIds) > 0 {
+			excludedIds := make([]string, 0, len(excludedServiceIds))
+			for id := range excludedServiceIds {
+				excludedIds = append(excludedIds, "?")
+				args = append(args, id)
+			}
+			conditions = append(conditions, fmt.Sprintf("serviceId NOT IN (%s)", strings.Join(excludedIds, ",")))
+			models.Log.Debug("SearchPrograms: Adding exclusion condition for %d services", len(excludedServiceIds))
 		}
 	}
 	
@@ -350,7 +402,7 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64, c
 
 	models.Log.Debug("SearchPrograms: Final query: %s, Args: %v", query, args)
 
-	rows, err := db.Query(query, args...)
+	rows, err = db.Query(query, args...)
 	if err != nil {
 		models.Log.Error("SearchPrograms: Query error: %v", err)
 		return nil, err
@@ -409,7 +461,8 @@ func GetAllServices() []*models.Service {
 // GetFilteredServices は指定されたタイプのサービスを取得する
 // allowedTypes が空の場合は、タイプ1,2,3のすべてのサービスを返す
 // excludedTypes に指定されたタイプのサービスは除外される
-func GetFilteredServices(allowedTypes []int, excludedTypes []int) []*models.Service {
+// また、除外チャンネルテーブルに登録されているサービスも除外される
+func GetFilteredServices(db *sql.DB, allowedTypes []int, excludedTypes []int) []*models.Service {
 	models.Log.Debug("GetFilteredServices: Retrieving services with types: %v, excluding: %v", allowedTypes, excludedTypes)
 	allServices := models.ServiceMapInstance.GetAll()
 	
@@ -418,6 +471,26 @@ func GetFilteredServices(allowedTypes []int, excludedTypes []int) []*models.Serv
 	for _, t := range excludedTypes {
 		excludeMap[t] = true
 	}
+	
+	// 除外チャンネルのマップを作成
+	excludedServiceIds := make(map[int64]bool)
+	if db != nil {
+		rows, err := db.Query("SELECT serviceId FROM excluded_services")
+		if err != nil {
+			models.Log.Error("GetFilteredServices: Failed to get excluded services: %v", err)
+		} else {
+			defer rows.Close()
+			for rows.Next() {
+				var serviceId int64
+				if err := rows.Scan(&serviceId); err != nil {
+					models.Log.Error("GetFilteredServices: Failed to scan excluded service: %v", err)
+					continue
+				}
+				excludedServiceIds[serviceId] = true
+			}
+		}
+	}
+	models.Log.Debug("GetFilteredServices: Loaded %d excluded services", len(excludedServiceIds))
 	
 	// allowedTypesが空の場合、デフォルトで1,2,3を許可
 	var allowMap map[int]bool
@@ -432,6 +505,12 @@ func GetFilteredServices(allowedTypes []int, excludedTypes []int) []*models.Serv
 	for _, service := range allServices {
 		// 除外リストにあるタイプはスキップ
 		if excludeMap[service.Type] {
+			continue
+		}
+		
+		// 除外サービスIDリストにあるサービスはスキップ
+		if excludedServiceIds[service.ServiceID] {
+			models.Log.Debug("GetFilteredServices: Skipping excluded service: %d (%s)", service.ServiceID, service.Name)
 			continue
 		}
 		
@@ -451,6 +530,93 @@ func GetFilteredServices(allowedTypes []int, excludedTypes []int) []*models.Serv
 	models.Log.Info("GetFilteredServices: Retrieved %d services after filtering out of %d total services", 
 		len(filteredServices), len(allServices))
 	return filteredServices
+}
+
+// GetExcludedServices は除外チャンネルの一覧を取得する
+func GetExcludedServices(db *sql.DB) ([]models.ExcludedService, error) {
+	models.Log.Debug("GetExcludedServices: Retrieving excluded services")
+	
+	rows, err := db.Query("SELECT serviceId, name, createdAt FROM excluded_services")
+	if err != nil {
+		models.Log.Error("GetExcludedServices: Failed to query: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var services []models.ExcludedService
+	for rows.Next() {
+		var s models.ExcludedService
+		if err := rows.Scan(&s.ServiceID, &s.Name, &s.CreatedAt); err != nil {
+			models.Log.Error("GetExcludedServices: Failed to scan: %v", err)
+			return nil, err
+		}
+		
+		// サービスマップから追加情報を取得
+		if service, ok := models.ServiceMapInstance.Get(s.ServiceID); ok {
+			s.Type = service.Type
+			s.NetworkID = service.NetworkID
+			s.RemoteControlKeyID = service.RemoteControlKeyID
+			s.ChannelType = service.ChannelType
+			s.ChannelNumber = service.ChannelNumber
+			
+			// もしDBから取得した名前が空または単にサービスIDだけなら、正確な名前を使用
+			if s.Name == "" || s.Name == fmt.Sprintf("Service %d", s.ServiceID) {
+				s.Name = service.Name
+			}
+			
+			models.Log.Debug("GetExcludedServices: Enhanced service info for %d: Type=%d, RCKey=%d, ChannelType=%s", 
+				s.ServiceID, s.Type, s.RemoteControlKeyID, s.ChannelType)
+		} else {
+			models.Log.Debug("GetExcludedServices: No service info found in ServiceMap for ID %d", s.ServiceID)
+		}
+		
+		services = append(services, s)
+	}
+	
+	if err := rows.Err(); err != nil {
+		models.Log.Error("GetExcludedServices: Rows error: %v", err)
+		return nil, err
+	}
+	
+	// サービスIDでソート
+	sort.Slice(services, func(i, j int) bool {
+		return services[i].ServiceID < services[j].ServiceID
+	})
+	
+	models.Log.Info("GetExcludedServices: Retrieved and enhanced %d excluded services", len(services))
+	return services, nil
+}
+
+// AddExcludedService は除外チャンネルを追加する
+func AddExcludedService(db *sql.DB, serviceId int64, name string) error {
+	models.Log.Debug("AddExcludedService: Adding service %d (%s) to excluded list", serviceId, name)
+	
+	_, err := db.Exec(
+		"INSERT OR REPLACE INTO excluded_services (serviceId, name, createdAt) VALUES (?, ?, ?)",
+		serviceId, name, time.Now().UnixMilli(),
+	)
+	if err != nil {
+		models.Log.Error("AddExcludedService: Failed to insert: %v", err)
+		return err
+	}
+	
+	models.Log.Info("AddExcludedService: Service %d (%s) added to excluded list", serviceId, name)
+	return nil
+}
+
+// RemoveExcludedService は除外チャンネルを削除する
+func RemoveExcludedService(db *sql.DB, serviceId int64) error {
+	models.Log.Debug("RemoveExcludedService: Removing service %d from excluded list", serviceId)
+	
+	res, err := db.Exec("DELETE FROM excluded_services WHERE serviceId = ?", serviceId)
+	if err != nil {
+		models.Log.Error("RemoveExcludedService: Failed to delete: %v", err)
+		return err
+	}
+	
+	affected, _ := res.RowsAffected()
+	models.Log.Info("RemoveExcludedService: %d service(s) removed from excluded list", affected)
+	return nil
 }
 
 // InitProgramsFromAPI は、Mirakurunの/api/programsエンドポイントから
