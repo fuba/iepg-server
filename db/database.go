@@ -229,13 +229,15 @@ func StartCleanupRoutine(db *sql.DB) {
 }
 
 // SearchPrograms は検索条件に一致する番組を取得する共通関数
-func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64) ([]models.Program, error) {
-	models.Log.Debug("SearchPrograms: Query=%s, ServiceId=%d, StartFrom=%d, StartTo=%d",
-		q, serviceId, startFrom, startTo)
+func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64, channelType int) ([]models.Program, error) {
+	models.Log.Debug("SearchPrograms: Query=%s, ServiceId=%d, StartFrom=%d, StartTo=%d, ChannelType=%d",
+		q, serviceId, startFrom, startTo, channelType)
 
 	var args []interface{}
 	var query string
 	var conditions []string
+	// 放送種別でフィルタリングするためのサービスID一覧
+	var serviceIDs []int64
 
 	if q != "" {
 		// クエリを解析して正負の検索条件に分ける
@@ -286,7 +288,42 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64) (
 		models.Log.Debug("SearchPrograms: Using regular query without search terms")
 	}
 
+	// 放送種別でフィルタリング
+	if channelType > 0 && channelType <= 3 {
+		// 指定された放送種別に該当するサービスIDのリストを取得
+		services := models.ServiceMapInstance.GetAll()
+		models.Log.Debug("SearchPrograms: Filtering by channelType %d, total services: %d", channelType, len(services))
+		
+		// サービスリストの内容をデバッグ出力
+		for _, service := range services {
+			models.Log.Debug("ServiceMap contains: ServiceID=%d, Name=%s, Type=%d", 
+				service.ServiceID, service.Name, service.Type)
+		}
+		
+		for _, service := range services {
+			if service.Type == channelType {
+				serviceIDs = append(serviceIDs, service.ServiceID)
+				models.Log.Debug("SearchPrograms: Added service to filter: ServiceID=%d, Name=%s, Type=%d", 
+					service.ServiceID, service.Name, service.Type)
+			}
+		}
+		
+		if len(serviceIDs) > 0 {
+			placeholders := make([]string, len(serviceIDs))
+			for i := range serviceIDs {
+				placeholders[i] = "?"
+				args = append(args, serviceIDs[i])
+			}
+			conditions = append(conditions, "serviceId IN ("+strings.Join(placeholders, ",")+")") 
+			models.Log.Debug("SearchPrograms: Adding channelType condition for type %d with %d services", 
+				channelType, len(serviceIDs))
+		} else {
+			models.Log.Debug("SearchPrograms: No services found for channel type: %d, services may not be loaded yet", channelType)
+		}
+	}
+	
 	if serviceId != 0 {
+		// 特定のサービスIDが指定されていれば、放送種別より優先
 		conditions = append(conditions, "serviceId = ?")
 		args = append(args, serviceId)
 		models.Log.Debug("SearchPrograms: Adding serviceId condition: %d", serviceId)

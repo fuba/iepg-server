@@ -215,7 +215,23 @@ func convertToService(resp *mirakurunServiceResponse) *models.Service {
 		service.ChannelNumber = resp.Channel.Channel
 		service.ChannelName = resp.Channel.Name
 		service.ChannelTSMFRel = resp.Channel.TSMFRel
+		
+		// ChannelTypeに基づいてTypeも設定（重複更新になるが整合性を確保）
+		// GR=地上波=1, BS=2, CS=3
+		switch resp.Channel.Type {
+		case "GR":
+			service.Type = 1
+		case "BS":
+			service.Type = 2
+		case "CS":
+			service.Type = 3
+		default:
+			// 既存のTypeをそのまま使用
+		}
 	}
+	
+	models.Log.Debug("convertToService: Converted service: ID=%d, Name=%s, Type=%d, ChannelType=%s", 
+		service.ID, service.Name, service.Type, service.ChannelType)
 
 	return service
 }

@@ -395,6 +395,8 @@
             const serviceId = document.getElementById('serviceId').value;
             const startFrom = document.getElementById('startFrom').value;
             const startTo = document.getElementById('startTo').value;
+            // 放送種別のフィルタパラメータを取得
+            const channelType = document.querySelector('input[name="channelFilter"]:checked').value;
             
             // URLパラメータの構築
             let params = new URLSearchParams();
@@ -402,6 +404,10 @@
             if (serviceId) params.append('serviceId', serviceId);
             if (startFrom) params.append('startFrom', startFrom);
             if (startTo) params.append('startTo', startTo);
+            // 「すべて」以外の場合は放送種別パラメータを追加
+            if (channelType !== 'all') {
+                params.append('channelType', channelType);
+            }
             
             // ローディング表示
             document.getElementById('loading').classList.remove('hidden');

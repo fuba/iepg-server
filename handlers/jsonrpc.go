@@ -34,10 +34,11 @@ type RPCError struct {
 
 // SearchParams は RPC 用の検索パラメータ
 type SearchParams struct {
-	Q         string `json:"q"`
-	ServiceID int64  `json:"serviceId"`
-	StartFrom int64  `json:"startFrom"`
-	StartTo   int64  `json:"startTo"`
+	Q          string `json:"q"`
+	ServiceID  int64  `json:"serviceId"`
+	StartFrom  int64  `json:"startFrom"`
+	StartTo    int64  `json:"startTo"`
+	ChannelType int   `json:"channelType"`
 }
 
 // rpcHandler は JSON-RPC リクエストのディスパッチ処理を行う
@@ -71,8 +72,8 @@ func rpcHandler(dbConn *sql.DB, w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		
-		models.Log.Debug("rpcHandler: searchPrograms params - q=%s, serviceId=%d, startFrom=%d, startTo=%d", 
-			params.Q, params.ServiceID, params.StartFrom, params.StartTo)
+		models.Log.Debug("rpcHandler: searchPrograms params - q=%s, serviceId=%d, startFrom=%d, startTo=%d, channelType=%d", 
+			params.Q, params.ServiceID, params.StartFrom, params.StartTo, params.ChannelType)
 		
 		result, err := searchProgramsRPC(dbConn, params)
 		if err != nil {
@@ -121,10 +122,10 @@ func writeRPCError(w http.ResponseWriter, id interface{}, code int, message stri
 
 // searchProgramsRPC は SearchParams をもとにプログラムを検索する
 func searchProgramsRPC(dbConn *sql.DB, params SearchParams) ([]models.Program, error) {
-	models.Log.Debug("searchProgramsRPC: Searching programs with params - q=%s, serviceId=%d, startFrom=%d, startTo=%d", 
-		params.Q, params.ServiceID, params.StartFrom, params.StartTo)
+	models.Log.Debug("searchProgramsRPC: Searching programs with params - q=%s, serviceId=%d, startFrom=%d, startTo=%d, channelType=%d", 
+		params.Q, params.ServiceID, params.StartFrom, params.StartTo, params.ChannelType)
 	
-	return db.SearchPrograms(dbConn, params.Q, params.ServiceID, params.StartFrom, params.StartTo)
+	return db.SearchPrograms(dbConn, params.Q, params.ServiceID, params.StartFrom, params.StartTo, params.ChannelType)
 }
 
 // NewRPCServer は JSON-RPC 用のHTTPハンドラを返す

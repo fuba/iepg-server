@@ -21,12 +21,14 @@ func HandleSimpleSearch(w http.ResponseWriter, r *http.Request, dbConn *sql.DB) 
 	serviceIdStr := r.URL.Query().Get("serviceId")
 	startFromStr := r.URL.Query().Get("startFrom")
 	startToStr := r.URL.Query().Get("startTo")
+	channelTypeStr := r.URL.Query().Get("channelType")
 	
-	models.Log.Debug("HandleSimpleSearch: Query params - q=%s, serviceId=%s, startFrom=%s, startTo=%s", 
-		q, serviceIdStr, startFromStr, startToStr)
+	models.Log.Debug("HandleSimpleSearch: Query params - q=%s, serviceId=%s, startFrom=%s, startTo=%s, channelType=%s", 
+		q, serviceIdStr, startFromStr, startToStr, channelTypeStr)
 
 	var serviceId int64
 	var startFrom, startTo int64
+	var channelType int
 	var err error
 	
 	if serviceIdStr != "" {
@@ -34,6 +36,24 @@ func HandleSimpleSearch(w http.ResponseWriter, r *http.Request, dbConn *sql.DB) 
 		if err != nil {
 			models.Log.Error("HandleSimpleSearch: Invalid serviceId: %s, error: %v", serviceIdStr, err)
 			http.Error(w, "invalid serviceId", http.StatusBadRequest)
+			return
+		}
+	}
+	
+	if channelTypeStr != "" {
+		var channelTypeInt int64
+		channelTypeInt, err = strconv.ParseInt(channelTypeStr, 10, 64)
+		if err != nil {
+			models.Log.Error("HandleSimpleSearch: Invalid channelType: %s, error: %v", channelTypeStr, err) 
+			http.Error(w, "invalid channelType", http.StatusBadRequest)
+			return
+		}
+		// チャンネルタイプは1〜3の範囲のみ許可
+		if channelTypeInt >= 1 && channelTypeInt <= 3 {
+			channelType = int(channelTypeInt)
+		} else {
+			models.Log.Error("HandleSimpleSearch: ChannelType out of range: %d", channelTypeInt)
+			http.Error(w, "channelType must be 1, 2, or 3", http.StatusBadRequest)
 			return
 		}
 	}
@@ -56,10 +76,10 @@ func HandleSimpleSearch(w http.ResponseWriter, r *http.Request, dbConn *sql.DB) 
 		}
 	}
 	
-	models.Log.Debug("HandleSimpleSearch: Parsed params - q=%s, serviceId=%d, startFrom=%d, startTo=%d", 
-		q, serviceId, startFrom, startTo)
+	models.Log.Debug("HandleSimpleSearch: Parsed params - q=%s, serviceId=%d, startFrom=%d, startTo=%d, channelType=%d", 
+		q, serviceId, startFrom, startTo, channelType)
 
-	programs, err := db.SearchPrograms(dbConn, q, serviceId, startFrom, startTo)
+	programs, err := db.SearchPrograms(dbConn, q, serviceId, startFrom, startTo, channelType)
 	if err != nil {
 		models.Log.Error("HandleSimpleSearch: Search failed: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -112,6 +132,12 @@ func HandleGetServices(w http.ResponseWriter, r *http.Request) {
 	
 	// すべてのサービスを取得（タイプ192を除く）
 	services := db.GetFilteredServices(nil, excludedTypes)
+	
+	// デバッグ: サービスタイプ情報をログに出力
+	for _, svc := range services {
+		models.Log.Debug("Service: ID=%d, ServiceID=%d, Name=%s, Type=%d, ChannelType=%s", 
+			svc.ID, svc.ServiceID, svc.Name, svc.Type, svc.ChannelType)
+	}
 	
 	// サービスをリモコンキーID順、次にサービスID順でソート
 	sort.Slice(services, func(i, j int) bool {
