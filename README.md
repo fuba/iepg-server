@@ -8,6 +8,8 @@ IEPGフォーマットでテレビ番組情報を提供するサーバーです�
 - 番組検索機能（キーワード、チャンネル、時間範囲による検索）
 - IEPG形式での番組詳細情報の提供
 - Webベースの検索UI
+- 放送種別（地上波/BS/CS）によるフィルタリング機能
+- 検索結果から除外したいチャンネルを設定する機能
 
 ## インストール方法
 
@@ -22,7 +24,7 @@ IEPGフォーマットでテレビ番組情報を提供するサーバーです�
 1. リポジトリをクローン
 
 ```bash
-git clone https://github.com/yourusername/iepg-server.git
+git clone https://github.com/fuba/iepg-server.git
 cd iepg-server
 ```
 
@@ -44,7 +46,7 @@ mkdir -p data
 4. ビルドと起動
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 5. 動作確認
@@ -62,20 +64,20 @@ git pull
 2. 既存のコンテナを停止して削除
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 3. 新しいイメージをビルドして再起動
 
 ```bash
-docker-compose build --no-cache
-docker-compose up -d
+docker compose build --no-cache
+docker compose up -d
 ```
 
 4. ログを確認
 
 ```bash
-docker-compose logs -f
+docker compose logs -f
 ```
 
 ## API仕様
@@ -91,6 +93,8 @@ docker-compose logs -f
 - `serviceId` (オプション): サービスID（チャンネルのID）
 - `startFrom` (オプション): 開始時間の下限（UNIXタイムスタンプ、ミリ秒）
 - `startTo` (オプション): 開始時間の上限（UNIXタイムスタンプ、ミリ秒）
+- `channelType` (オプション): 放送種別（"GR": 地上波, "BS": BSデジタル, "CS": CSデジタル）
+- `excludedServices` (オプション): 検索結果から除外するサービスIDのリスト（カンマ区切り）
 
 **レスポンス**: 番組情報の配列（JSON形式）
 
