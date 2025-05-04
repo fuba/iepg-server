@@ -75,51 +75,60 @@ func TestSearchPrograms(t *testing.T) {
 		serviceId    int64
 		startFrom    int64
 		startTo      int64
+		channelType  int
 		expectedIDs  []int64
 		errorExpected bool
 	}{
 		{
 			name:        "基本検索 - 'スポーツ'",
 			query:       "スポーツ",
+			channelType: 0,
 			expectedIDs: []int64{2, 3},
 		},
 		{
 			name:        "否定検索 - 'ドラマ -スポーツ'",
 			query:       "ドラマ -スポーツ",
+			channelType: 0,
 			expectedIDs: []int64{},
 		},
 		{
 			name:        "否定検索 - '-スポーツ'",
 			query:       "-スポーツ",
+			channelType: 0,
 			expectedIDs: []int64{1, 4, 5},
 		},
 		{
 			name:        "複合否定検索 - '-スポーツ -ニュース'",
 			query:       "-スポーツ -ニュース",
+			channelType: 0,
 			expectedIDs: []int64{4, 5},
 		},
 		{
 			name:        "サービスIDによるフィルタリング",
 			query:       "",
 			serviceId:   101,
+			channelType: 0,
 			expectedIDs: []int64{1, 3},
 		},
 		{
 			name:        "時間によるフィルタリング",
 			query:       "",
 			startFrom:   1100,
+			channelType: 0,
 			expectedIDs: []int64{4, 5},
 		},
 		{
 			name:        "複合フィルタリング - '映画' with serviceId",
 			query:       "映画",
 			serviceId:   102,
+			channelType: 0,
 			expectedIDs: []int64{5},
 		},
 		{
 			name:        "複合フィルタリング - '-ニュース -スポーツ' with serviceId",
 			query:       "-ニュース -スポーツ",
 			serviceId:   102,
+			channelType: 0,
 			expectedIDs: []int64{5},
 		},
 	}
@@ -127,7 +136,7 @@ func TestSearchPrograms(t *testing.T) {
 	// テストの実行
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			programs, err := SearchPrograms(db, tc.query, tc.serviceId, tc.startFrom, tc.startTo)
+			programs, err := SearchPrograms(db, tc.query, tc.serviceId, tc.startFrom, tc.startTo, tc.channelType)
 			
 			if tc.errorExpected {
 				if err == nil {

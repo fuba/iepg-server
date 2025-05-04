@@ -3,6 +3,9 @@
 IEPGフォーマットでテレビ番組情報を提供するサーバーです。Mirakurunと連携して動作します。
 現在 IEPG フォーマットに全然準拠できてなさそうなので気にしない人だけ使ってください。
 
+[![Go Test](https://github.com/fuba/iepg-server/actions/workflows/go-test.yml/badge.svg)](https://github.com/fuba/iepg-server/actions/workflows/go-test.yml)
+[![Docker Build and Push](https://github.com/fuba/iepg-server/actions/workflows/docker-push.yml/badge.svg)](https://github.com/fuba/iepg-server/actions/workflows/docker-push.yml)
+
 ## 機能
 
 - Mirakurunからの番組情報の取得と保存
@@ -80,6 +83,28 @@ docker compose up -d
 ```bash
 docker compose logs -f
 ```
+
+## 開発者向け情報
+
+### テスト実行
+
+テストを実行するには以下のコマンドを使用します：
+
+```bash
+# Go標準テストの実行
+go test -v ./db
+
+# Dockerを使用したテスト
+docker build -t iepg-server-test -f Dockerfile.test .
+docker run --rm iepg-server-test
+```
+
+### CI/CD
+
+このプロジェクトではGitHub Actionsを使用して以下の自動化を実施しています：
+
+- **テスト自動化**: pushやプルリクエスト時に自動的にテストが実行されます
+- **Docker自動ビルド**: mainブランチへのpushやタグの作成時に自動的にDockerイメージがビルドされGitHub Container Registryに公開されます
 
 ## API仕様
 
