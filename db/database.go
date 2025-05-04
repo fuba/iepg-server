@@ -238,18 +238,49 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64) (
 	var conditions []string
 
 	if q != "" {
-		// 検索キーワードを正規化
-		normalizedQ := models.NormalizeForSearch(q)
+		// クエリを解析して正負の検索条件に分ける
+		positiveTerms := []string{}
+		negativeTerms := []string{}
 		
-		// 正規化されたカラムを使って検索
-		likePattern := "%" + normalizedQ + "%"
+		// スペースで区切って検索語を分離
+		terms := strings.Fields(q)
+		for _, term := range terms {
+			if strings.HasPrefix(term, "-") && len(term) > 1 {
+				// NOT検索条件
+				negTerm := term[1:] // "-"を除去
+				negativeTerms = append(negativeTerms, models.NormalizeForSearch(negTerm))
+			} else {
+				// 通常の検索条件
+				positiveTerms = append(positiveTerms, models.NormalizeForSearch(term))
+			}
+		}
+		
+		// クエリの基本部分を構築
 		query = `
 			SELECT id, serviceId, startAt, duration, name, description 
 			FROM programs 
-			WHERE (nameForSearch LIKE ? OR descForSearch LIKE ?)
+			WHERE 1=1
 		`
-		args = append(args, likePattern, likePattern)
-		models.Log.Debug("SearchPrograms: Using normalized LIKE search with pattern: %s", likePattern)
+		
+		// 肯定的な検索条件（OR結合）
+		if len(positiveTerms) > 0 {
+			posConditions := []string{}
+			for _, term := range positiveTerms {
+				likePattern := "%" + term + "%"
+				posConditions = append(posConditions, "(nameForSearch LIKE ? OR descForSearch LIKE ?)")
+				args = append(args, likePattern, likePattern)
+			}
+			query += " AND (" + strings.Join(posConditions, " OR ") + ")"
+			models.Log.Debug("SearchPrograms: Added positive search conditions: %v", positiveTerms)
+		}
+		
+		// 否定的な検索条件（NOT LIKE）
+		for _, term := range negativeTerms {
+			likePattern := "%" + term + "%"
+			query += " AND (nameForSearch NOT LIKE ? AND descForSearch NOT LIKE ?)"
+			args = append(args, likePattern, likePattern)
+		}
+		models.Log.Debug("SearchPrograms: Added negative search conditions: %v", negativeTerms)
 	} else {
 		query = "SELECT id, serviceId, startAt, duration, name, description FROM programs"
 		models.Log.Debug("SearchPrograms: Using regular query without search terms")
@@ -407,6 +438,8 @@ func InitProgramsFromAPI(ctx context.Context, db *sql.DB, mirakurunBaseURL strin
 			apiURL += "programs"
 		}
 	}
+	
+	models.Log.Debug("InitProgramsFromAPI: Constructed URL: %s from base URL: %s", apiURL, mirakurunBaseURL)
 
 	models.Log.Info("InitProgramsFromAPI: Fetching all programs from: %s", apiURL)
 

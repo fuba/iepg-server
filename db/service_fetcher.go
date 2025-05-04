@@ -4,9 +4,9 @@ package db
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/fuba/iepg-server/models"
@@ -57,7 +57,22 @@ func StartServiceFetcher(ctx context.Context, mirakurunBaseURL string) {
 // StartServiceEventStream はMirakurunのサービスイベントストリームを購読する
 func StartServiceEventStream(ctx context.Context, mirakurunBaseURL string) {
 	// サービスイベントのストリームURLを構築
-	apiURL := fmt.Sprintf("%s/events/stream?resource=service", mirakurunBaseURL)
+	// URLのパスが正しいことを確認
+	apiURL := mirakurunBaseURL
+	if !strings.HasSuffix(apiURL, "/api") && !strings.HasSuffix(apiURL, "/api/") {
+		// URLが/apiで終わっていない場合は追加
+		if !strings.HasSuffix(apiURL, "/") {
+			apiURL += "/"
+		}
+		if !strings.Contains(apiURL, "/api/") {
+			apiURL += "api/"
+		}
+	} else if !strings.HasSuffix(apiURL, "/") {
+		// /apiで終わっていて/が無い場合は追加
+		apiURL += "/"
+	}
+	// イベントストリームのURLを構築
+	apiURL += "events/stream?resource=service"
 	models.Log.Debug("StartServiceEventStream: Starting service event stream with URL: %s", apiURL)
 
 	for {
@@ -126,8 +141,22 @@ func StartServiceEventStream(ctx context.Context, mirakurunBaseURL string) {
 // fetchServices はMirakurunからサービス情報を取得する
 func fetchServices(ctx context.Context, mirakurunBaseURL string) {
 	// サービス一覧のAPIエンドポイントURL
-	apiURL := fmt.Sprintf("%s/services", mirakurunBaseURL)
-	models.Log.Debug("fetchServices: Fetching services from: %s", apiURL)
+	apiURL := mirakurunBaseURL
+	if !strings.HasSuffix(apiURL, "/api") && !strings.HasSuffix(apiURL, "/api/") {
+		// URLが/apiで終わっていない場合は追加
+		if !strings.HasSuffix(apiURL, "/") {
+			apiURL += "/"
+		}
+		if !strings.Contains(apiURL, "/api/") {
+			apiURL += "api/"
+		}
+	} else if !strings.HasSuffix(apiURL, "/") {
+		// /apiで終わっていて/が無い場合は追加
+		apiURL += "/"
+	}
+	// サービス一覧のURLを構築
+	apiURL += "services"
+	models.Log.Debug("fetchServices: Fetching services from: %s (base URL: %s)", apiURL, mirakurunBaseURL)
 
 	// リクエスト作成
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
