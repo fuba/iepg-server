@@ -11,6 +11,10 @@ jobs:
   build-and-push:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
+    # パッケージを作成する権限を追加
+    permissions:
+      contents: read
+      packages: write
     
     steps:
     - name: Check out code
