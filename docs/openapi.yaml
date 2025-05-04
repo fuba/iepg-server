@@ -2,7 +2,7 @@ openapi: 3.0.0
 info:
   title: IEPG Server API
   description: テレビ番組情報検索・取得APIとIEPG形式での提供
-  version: 1.0.0
+  version: 1.1.0
   license:
     name: MIT
 servers:
@@ -13,6 +13,8 @@ tags:
     description: 番組情報
   - name: services
     description: サービス情報（チャンネル）
+  - name: ui
+    description: ユーザーインターフェース
 paths:
   /search:
     get:
@@ -47,6 +49,13 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: channelType
+          in: query
+          description: チャンネルタイプのフィルター（1=地上波, 2=BS, 3=CS）
+          required: false
+          schema:
+            type: integer
+            enum: [1, 2, 3]
       responses:
         '200':
           description: 番組情報の配列
@@ -63,7 +72,7 @@ paths:
   /services:
     get:
       summary: サービス一覧
-      description: 利用可能なサービス（チャンネル）の一覧を取得します
+      description: 利用可能なサービス（チャンネル）の一覧を取得します（除外設定を考慮）
       tags:
         - services
       responses:
@@ -75,6 +84,140 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Service'
+        '500':
+          description: サーバーエラー
+  /services/all:
+    get:
+      summary: 全サービス一覧
+      description: 除外設定に関係なく全てのサービス（チャンネル）の一覧を取得します
+      tags:
+        - services
+      responses:
+        '200':
+          description: サービス情報の配列（除外フラグ付き）
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceWithExcluded'
+        '500':
+          description: サーバーエラー
+  /services/searchable:
+    get:
+      summary: 検索可能なサービス一覧
+      description: 検索対象となるサービス（除外チャンネルを除く）の一覧を取得します
+      tags:
+        - services
+      parameters:
+        - name: channelType
+          in: query
+          description: チャンネルタイプのフィルター（1=地上波, 2=BS, 3=CS）
+          required: false
+          schema:
+            type: integer
+            enum: [1, 2, 3]
+      responses:
+        '200':
+          description: サービス情報の配列
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Service'
+        '400':
+          description: 不正なリクエストパラメータ
+        '500':
+          description: サーバーエラー
+  /services/excluded:
+    get:
+      summary: 除外チャンネル一覧
+      description: 検索から除外するチャンネルの一覧を取得します
+      tags:
+        - services
+      responses:
+        '200':
+          description: 除外チャンネル情報の配列
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExcludedService'
+        '500':
+          description: サーバーエラー
+  /services/exclude:
+    post:
+      summary: チャンネルを除外設定に追加
+      description: 指定したチャンネルを検索対象から除外します
+      tags:
+        - services
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                serviceId:
+                  type: integer
+                  format: int64
+                  description: 除外するサービスID
+                name:
+                  type: string
+                  description: サービス名（省略可能）
+              required:
+                - serviceId
+      responses:
+        '201':
+          description: 除外設定に追加成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: 不正なリクエストパラメータ
+        '500':
+          description: サーバーエラー
+  /services/unexclude:
+    post:
+      summary: チャンネルを除外設定から削除
+      description: 指定したチャンネルを除外設定から削除します
+      tags:
+        - services
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                serviceId:
+                  type: integer
+                  format: int64
+                  description: 除外解除するサービスID
+              required:
+                - serviceId
+      responses:
+        '200':
+          description: 除外設定から削除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: 不正なリクエストパラメータ
         '500':
           description: サーバーエラー
   /program/{id}:
@@ -130,6 +273,19 @@ paths:
       responses:
         '200':
           description: 検索UI（HTML）
+          content:
+            text/html:
+              schema:
+                type: string
+  /ui/exclude-channels:
+    get:
+      summary: チャンネル除外設定UI
+      description: ブラウザで利用するチャンネル除外設定インターフェース
+      tags:
+        - ui
+      responses:
+        '200':
+          description: チャンネル除外設定UI（HTML）
           content:
             text/html:
               schema:
@@ -215,3 +371,41 @@ components:
         channelName:
           type: string
           description: チャンネル名
+    ServiceWithExcluded:
+      allOf:
+        - $ref: '#/components/schemas/Service'
+        - type: object
+          properties:
+            isExcluded:
+              type: boolean
+              description: 除外設定されているかどうか
+    ExcludedService:
+      type: object
+      properties:
+        serviceId:
+          type: integer
+          format: int64
+          description: サービスID
+        name:
+          type: string
+          description: サービス名
+        createdAt:
+          type: integer
+          format: int64
+          description: 除外設定が作成された時間（UNIXタイムスタンプ、ミリ秒）
+        type:
+          type: integer
+          description: サービスタイプ（1=地上波, 2=BS, 3=CS）
+        networkId:
+          type: integer
+          format: int64
+          description: ネットワークID
+        remoteControlKeyId:
+          type: integer
+          description: リモコンキー番号
+        channelType:
+          type: string
+          description: チャンネルタイプ（GR、BS、CSなど）
+        channelNumber:
+          type: string
+          description: チャンネル番号
