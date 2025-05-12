@@ -417,10 +417,15 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64, c
 				posConditions = append(posConditions, "(nameForSearch LIKE ? OR descForSearch LIKE ?)")
 				args = append(args, likePattern, likePattern)
 			}
+
+			// 各単語の検索条件をAND結合する
 			if len(phraseTerms) == 0 {
+				// フレーズ検索がない場合は、検索条件全体を括弧でグループ化する
+				// 例: AND ((condition1) AND (condition2))
 				query += " AND (" + strings.Join(posConditions, " AND ") + ")"
 			} else {
-				// フレーズ検索がある場合は、AND条件で追加
+				// フレーズ検索がある場合は、既に外側に括弧があるため、内側の括弧だけ追加
+				// 例: AND (phraseConditions) AND (condition1) AND (condition2)
 				query += " AND " + strings.Join(posConditions, " AND ")
 			}
 			models.Log.Debug("SearchPrograms: Added positive search conditions: %v", positiveTerms)
