@@ -257,30 +257,159 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64, c
 
 	if q != "" {
 		// クエリを解析して正負の検索条件に分ける
+		positiveTermsMap := make(map[string]bool) // 正の検索語の重複を防ぐためのマップ
 		positiveTerms := []string{}
 		negativeTerms := []string{}
-		
-		// スペースで区切って検索語を分離
-		terms := strings.Fields(q)
-		for _, term := range terms {
-			if strings.HasPrefix(term, "-") && len(term) > 1 {
-				// NOT検索条件
-				negTerm := term[1:] // "-"を除去
-				negativeTerms = append(negativeTerms, models.NormalizeForSearch(negTerm))
-			} else {
-				// 通常の検索条件
-				positiveTerms = append(positiveTerms, models.NormalizeForSearch(term))
+		phraseTerms := []string{}
+
+		// ダブルクォーテーションで囲まれたフレーズを抽出する正規表現
+		var currentPhrase strings.Builder
+		var inPhrase bool
+		var escapeNext bool
+
+		// 文字ごとに処理してフレーズを抽出
+		for i := 0; i < len(q); i++ {
+			c := q[i]
+
+			// エスケープ文字の処理
+			if c == '\\' && !escapeNext {
+				escapeNext = true
+				continue
+			}
+
+			// ダブルクォートの処理
+			if c == '"' && !escapeNext {
+				if inPhrase {
+					// フレーズの終了
+					phraseStr := currentPhrase.String()
+					if phraseStr != "" {
+						phraseTerms = append(phraseTerms, models.NormalizeForSearch(phraseStr))
+					}
+					currentPhrase.Reset()
+					inPhrase = false
+				} else {
+					// フレーズの開始
+					inPhrase = true
+				}
+				continue
+			}
+
+			if inPhrase {
+				// フレーズ内の文字を追加
+				currentPhrase.WriteByte(c)
+			}
+
+			escapeNext = false
+		}
+
+		// 閉じていないフレーズがある場合は通常の単語として扱う
+		if inPhrase && currentPhrase.Len() > 0 {
+			// フレーズが閉じられていない場合、単語ごとに分割して通常の検索語として処理
+			for _, word := range strings.Fields(currentPhrase.String()) {
+				if word != "" {
+					normalizedWord := models.NormalizeForSearch(word)
+					positiveTermsMap[normalizedWord] = true
+				}
+			}
+			currentPhrase.Reset()
+			inPhrase = false  // フレーズ処理を終了してフラグをリセット
+		}
+
+		// ダブルクォーテーションの外にある通常の検索語を処理
+		remainingQuery := q
+		for {
+			// フレーズを検出して除去
+			startIdx := strings.Index(remainingQuery, "\"")
+			if startIdx == -1 {
+				break
+			}
+
+			// startIdxの前の部分を処理
+			if startIdx > 0 {
+				beforePhrase := remainingQuery[:startIdx]
+				// 単語を分離
+				for _, word := range strings.Fields(beforePhrase) {
+					if strings.HasPrefix(word, "-") && len(word) > 1 {
+						// NOT検索条件
+						negTerm := word[1:] // "-"を除去
+						negativeTerms = append(negativeTerms, models.NormalizeForSearch(negTerm))
+					} else if word != "" {
+						// 通常の検索条件
+						normalizedWord := models.NormalizeForSearch(word)
+						positiveTermsMap[normalizedWord] = true
+					}
+				}
+			}
+
+			// フレーズの終わりを検索
+			endIdx := -1
+			for i := startIdx + 1; i < len(remainingQuery); i++ {
+				if remainingQuery[i] == '"' && (i == 0 || remainingQuery[i-1] != '\\') {
+					endIdx = i
+					break
+				}
+			}
+
+			if endIdx == -1 {
+				// 閉じクォートがない場合は残りを通常の検索として処理
+				remainingPart := remainingQuery[startIdx+1:]
+				for _, word := range strings.Fields(remainingPart) {
+					if strings.HasPrefix(word, "-") && len(word) > 1 {
+						negativeTerms = append(negativeTerms, models.NormalizeForSearch(word[1:]))
+					} else if word != "" {
+						normalizedWord := models.NormalizeForSearch(word)
+						positiveTermsMap[normalizedWord] = true
+					}
+				}
+				break
+			}
+
+			// 次の検索を残りの部分で行う
+			remainingQuery = remainingQuery[endIdx+1:]
+		}
+
+		// 残りのクエリから単語を抽出
+		if !strings.Contains(remainingQuery, "\"") {
+			for _, word := range strings.Fields(remainingQuery) {
+				if strings.HasPrefix(word, "-") && len(word) > 1 {
+					// NOT検索条件
+					negTerm := word[1:] // "-"を除去
+					negativeTerms = append(negativeTerms, models.NormalizeForSearch(negTerm))
+				} else if word != "" {
+					// 通常の検索条件
+					normalizedWord := models.NormalizeForSearch(word)
+					positiveTermsMap[normalizedWord] = true
+				}
 			}
 		}
-		
+
 		// クエリの基本部分を構築
 		query = `
-			SELECT id, serviceId, startAt, duration, name, description 
-			FROM programs 
+			SELECT id, serviceId, startAt, duration, name, description
+			FROM programs
 			WHERE 1=1
 		`
-		
-		// 肯定的な検索条件（OR結合）
+
+		// フレーズ検索条件（厳密な照合）
+		if len(phraseTerms) > 0 {
+			phraseConditions := []string{}
+			for _, phrase := range phraseTerms {
+				// フレーズは完全一致ではなく、その語順で含まれるものを検索
+				phraseConditions = append(phraseConditions, "(nameForSearch LIKE ? OR descForSearch LIKE ?)")
+				args = append(args, "%"+phrase+"%", "%"+phrase+"%")
+			}
+			// 複数フレーズの場合はAND条件で連結（すべてのフレーズを含む必要がある）
+			query += " AND (" + strings.Join(phraseConditions, " AND ") + ")"
+			models.Log.Debug("SearchPrograms: Added phrase search conditions: %v", phraseTerms)
+		}
+
+		// マップからユニークな検索語のスライスを作成
+		positiveTerms = []string{} // 一度クリアして再作成
+		for term := range positiveTermsMap {
+			positiveTerms = append(positiveTerms, term)
+		}
+
+		// 肯定的な検索条件（AND結合）
 		if len(positiveTerms) > 0 {
 			posConditions := []string{}
 			for _, term := range positiveTerms {
@@ -288,10 +417,15 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64, c
 				posConditions = append(posConditions, "(nameForSearch LIKE ? OR descForSearch LIKE ?)")
 				args = append(args, likePattern, likePattern)
 			}
-			query += " AND (" + strings.Join(posConditions, " OR ") + ")"
+			if len(phraseTerms) == 0 {
+				query += " AND (" + strings.Join(posConditions, " AND ") + ")"
+			} else {
+				// フレーズ検索がある場合は、AND条件で追加
+				query += " AND " + strings.Join(posConditions, " AND ")
+			}
 			models.Log.Debug("SearchPrograms: Added positive search conditions: %v", positiveTerms)
 		}
-		
+
 		// 否定的な検索条件（NOT LIKE）
 		for _, term := range negativeTerms {
 			likePattern := "%" + term + "%"
@@ -299,6 +433,7 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64, c
 			args = append(args, likePattern, likePattern)
 		}
 		models.Log.Debug("SearchPrograms: Added negative search conditions: %v", negativeTerms)
+		models.Log.Debug("SearchPrograms: Query after all search conditions: %s", query)
 	} else {
 		query = "SELECT id, serviceId, startAt, duration, name, description FROM programs"
 		models.Log.Debug("SearchPrograms: Using regular query without search terms")
