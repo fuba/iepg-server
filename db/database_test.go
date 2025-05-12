@@ -52,6 +52,11 @@ func TestSearchPrograms(t *testing.T) {
 		{3, 101, 1090, 45, "スポーツ", "サッカーの試合特集。"},
 		{4, 103, 1135, 30, "アニメ", "人気アニメの新シリーズ。"},
 		{5, 102, 1165, 60, "映画", "古典的な映画の放送。"},
+		{6, 104, 1200, 45, "特集ドキュメンタリー", "日本の伝統文化についての特集番組です。"},
+		{7, 105, 1245, 30, "料理番組", "美味しい料理の作り方を紹介します。"},
+		{8, 106, 1275, 60, "旅行特集", "日本全国の名所を巡る旅行番組。美味しい料理も紹介。"},
+		{9, 107, 1335, 45, "音楽番組", "最新の音楽情報と人気アーティストの特集。"},
+		{10, 108, 1380, 30, "報道特集", "今日の出来事を詳しく解説する特別報道番組。"},
 	}
 
 	// データの挿入
@@ -95,13 +100,13 @@ func TestSearchPrograms(t *testing.T) {
 			name:        "否定検索 - '-スポーツ'",
 			query:       "-スポーツ",
 			channelType: 0,
-			expectedIDs: []int64{1, 4, 5},
+			expectedIDs: []int64{1, 4, 5, 6, 7, 8, 9, 10},
 		},
 		{
 			name:        "複合否定検索 - '-スポーツ -ニュース'",
 			query:       "-スポーツ -ニュース",
 			channelType: 0,
-			expectedIDs: []int64{4, 5},
+			expectedIDs: []int64{4, 5, 6, 7, 8, 9, 10}, // 報道特集はニュースに近いが別単語
 		},
 		{
 			name:        "サービスIDによるフィルタリング",
@@ -115,7 +120,7 @@ func TestSearchPrograms(t *testing.T) {
 			query:       "",
 			startFrom:   1100,
 			channelType: 0,
-			expectedIDs: []int64{4, 5},
+			expectedIDs: []int64{4, 5, 6, 7, 8, 9, 10},
 		},
 		{
 			name:        "複合フィルタリング - '映画' with serviceId",
@@ -130,6 +135,67 @@ func TestSearchPrograms(t *testing.T) {
 			serviceId:   102,
 			channelType: 0,
 			expectedIDs: []int64{5},
+		},
+		// フレーズ検索のテストケース
+		{
+			name:        "フレーズ検索 - '\"美味しい料理\"'",
+			query:       "\"美味しい料理\"",
+			channelType: 0,
+			expectedIDs: []int64{7, 8},
+		},
+		{
+			name:        "フレーズ検索 - '\"特集番組\"'",
+			query:       "\"特集番組\"",
+			channelType: 0,
+			expectedIDs: []int64{6},
+		},
+		{
+			name:        "フレーズ検索と通常検索の組み合わせ - '\"美味しい料理\" 旅行'",
+			query:       "\"美味しい料理\" 旅行",
+			channelType: 0,
+			expectedIDs: []int64{8},
+		},
+		{
+			name:        "スペース区切りAND検索 - 'ニュース 最新'",
+			query:       "ニュース 最新",
+			channelType: 0,
+			expectedIDs: []int64{1}, // ID=1だけが両方の単語を含む
+		},
+		{
+			name:        "スペース区切りAND検索 - '料理 日本'",
+			query:       "料理 日本",
+			channelType: 0,
+			expectedIDs: []int64{8}, // ID=8だけが両方の単語を含む
+		},
+		{
+			name:        "スペース区切りAND検索と否定検索の組み合わせ - '料理 日本 -旅行'",
+			query:       "料理 日本 -旅行",
+			channelType: 0,
+			expectedIDs: []int64{}, // 料理と日本の両方を含むのはID=8だが、旅行も含むので除外される
+		},
+		{
+			name:        "フレーズ検索と否定検索の組み合わせ - '\"美味しい料理\" -旅行'",
+			query:       "\"美味しい料理\" -旅行",
+			channelType: 0,
+			expectedIDs: []int64{7},
+		},
+		{
+			name:        "複数フレーズ検索 - '\"美味しい料理\" \"日本全国\"'",
+			query:       "\"美味しい料理\" \"日本全国\"",
+			channelType: 0,
+			expectedIDs: []int64{8},
+		},
+		{
+			name:        "フレーズ検索 - エスケープされていないフレーズ",
+			query:       "\"最新の音楽\"",
+			channelType: 0,
+			expectedIDs: []int64{9},
+		},
+		{
+			name:        "不完全なフレーズ検索 - 閉じクォートなし",
+			query:       "\"特集",
+			channelType: 0,
+			expectedIDs: []int64{6, 8, 9, 10, 3}, // ID=3 も特集を含む説明文があるのでマッチする
 		},
 	}
 
@@ -152,14 +218,27 @@ func TestSearchPrograms(t *testing.T) {
 			// 結果の確認
 			if len(programs) != len(tc.expectedIDs) {
 				t.Errorf("Expected %d programs, got %d", len(tc.expectedIDs), len(programs))
+
+				// デバッグ用に詳細情報を出力
+				t.Logf("Test case: %s", tc.name)
+				t.Logf("Query: %s", tc.query)
+				t.Logf("Expected IDs: %v", tc.expectedIDs)
+
+				// 見つかったIDのリスト
+				foundIDList := make([]int64, 0, len(programs))
+				for _, p := range programs {
+					foundIDList = append(foundIDList, p.ID)
+					t.Logf("Found program: ID=%d, Name=%s, Description=%s", p.ID, p.Name, p.Description)
+				}
+				t.Logf("Found IDs: %v", foundIDList)
 			}
-			
+
 			// IDの確認
 			foundIDs := make(map[int64]bool)
 			for _, p := range programs {
 				foundIDs[p.ID] = true
 			}
-			
+
 			for _, id := range tc.expectedIDs {
 				if !foundIDs[id] {
 					t.Errorf("Expected to find program with ID %d, but it was not in the results", id)

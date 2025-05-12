@@ -56,8 +56,17 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label for="q" class="block text-sm font-medium text-gray-700 mb-1">検索キーワード</label>
-                        <input type="text" id="q" name="q" placeholder="番組名や説明文で検索" 
+                        <input type="text" id="q" name="q" placeholder="番組名や説明文で検索"
                             class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        <div class="mt-1 text-xs text-gray-500">
+                            <p>検索のヒント: </p>
+                            <ul class="list-disc pl-5 mt-1 space-y-1">
+                                <li>単語で検索: <code>ニュース スポーツ</code> (すべてを含む)</li>
+                                <li>フレーズ検索: <code>"今日のニュース"</code> (語順通りに含む)</li>
+                                <li>除外検索: <code>-スポーツ</code> (含まないものを表示)</li>
+                                <li>複合検索: <code>"スポーツニュース" -野球</code></li>
+                            </ul>
+                        </div>
                     </div>
                     <div>
                         <label for="serviceId" class="block text-sm font-medium text-gray-700 mb-1">チャンネル</label>
