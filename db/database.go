@@ -61,6 +61,40 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 		return nil, err
 	}
 
+	// 予約テーブルの作成
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS reservations (
+			id                TEXT PRIMARY KEY,
+			programId         INTEGER NOT NULL,
+			serviceId         INTEGER NOT NULL,
+			name              TEXT NOT NULL,
+			startAt           INTEGER NOT NULL,
+			duration          INTEGER NOT NULL,
+			recorderUrl       TEXT NOT NULL,
+			recorderProgramId TEXT NOT NULL,
+			status            TEXT NOT NULL,
+			createdAt         INTEGER NOT NULL,
+			updatedAt         INTEGER NOT NULL,
+			error             TEXT
+		);
+	`)
+	if err != nil {
+		models.Log.Error("InitDB: Failed to create reservations table: %v", err)
+		db.Close()
+		return nil, err
+	}
+
+	// インデックスの作成
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_reservations_programId ON reservations(programId);`)
+	if err != nil {
+		models.Log.Error("InitDB: Failed to create index on programId: %v", err)
+	}
+	
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_reservations_status ON reservations(status);`)
+	if err != nil {
+		models.Log.Error("InitDB: Failed to create index on status: %v", err)
+	}
+
 	models.Log.Debug("InitDB: Database initialization completed successfully")
 	return db, nil
 }

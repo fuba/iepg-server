@@ -477,6 +477,11 @@
                                     <div class="ml-4 whitespace-nowrap text-sm text-gray-600">
                                         ${formatDate(startDate)} 〜 ${formatDate(endDate)}
                                     </div>
+                                    <button class="ml-2 px-3 py-1 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700 focus:outline-none reservation-btn" 
+                                        data-program-id="${program.id}" 
+                                        data-program-name="${escapeHtml(program.name)}">
+                                        予約
+                                    </button>
                                 </div>
                             </td>
                         `;
@@ -520,6 +525,49 @@
                 .replace(/>/g, "&gt;")
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
+        }
+        
+        // 予約ボタンのクリックイベント処理
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('reservation-btn')) {
+                const programId = e.target.dataset.programId;
+                const programName = e.target.dataset.programName;
+                
+                // 録画サーバーのURLを入力するダイアログ
+                const recorderUrl = prompt('録画サーバーのURLを入力してください\n(例: http://puma2:37569)\n空欄の場合は環境変数で設定されたデフォルトを使用します。', 'http://puma2:37569');
+                
+                if (recorderUrl !== null) { // nullはキャンセルボタンが押された場合
+                    // 予約処理
+                    makeReservation(programId, programName, recorderUrl);
+                }
+            }
+        });
+        
+        // 予約処理
+        async function makeReservation(programId, programName, recorderUrl) {
+            try {
+                const response = await fetch('/reservations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        programId: parseInt(programId),
+                        recorderUrl: recorderUrl || undefined
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`番組「${programName}」の予約が完了しました。`);
+                } else {
+                    alert(`予約に失敗しました: ${result.error || '不明なエラー'}`);
+                }
+            } catch (error) {
+                console.error('予約エラー:', error);
+                alert('予約処理中にエラーが発生しました。');
+            }
         }
     </script>
 </body>
