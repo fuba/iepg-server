@@ -8,6 +8,7 @@ import (
 	"os"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/gorilla/mux"
 
 	"github.com/fuba/iepg-server/db"
 	"github.com/fuba/iepg-server/handlers"
@@ -94,47 +95,65 @@ func main() {
 		models.Log.Info("Cleanup routine disabled (ENABLE_CLEANUP=%s)", cleanupEnabledStr)
 	}
 
+	// 録画サーバーのURLを環境変数から取得
+	recorderURL := os.Getenv("RECORDER_URL")
+	if recorderURL == "" {
+		recorderURL = "http://localhost:37569" // デフォルト値
+	}
+	models.Log.Debug("Using recorder URL: %s", recorderURL)
+
+	// 予約ハンドラーの初期化
+	reservationHandler := handlers.NewReservationHandler(dbConn, recorderURL)
+
+	// ルーターの設定
+	router := mux.NewRouter()
+
 	// HTTPエンドポイントの設定
-	http.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Handling search request: %s", r.URL.String())
 		handlers.HandleSimpleSearch(w, r, dbConn)
 	})
-	http.HandleFunc("/services", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/services", func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Handling services request: %s", r.URL.String())
 		handlers.HandleGetServices(w, r, dbConn)
 	})
-	http.HandleFunc("/services/all", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/services/all", func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Handling all services request: %s", r.URL.String())
 		handlers.HandleGetAllServices(w, r, dbConn)
 	})
-	http.HandleFunc("/services/searchable", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/services/searchable", func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Handling searchable services request: %s", r.URL.String())
 		handlers.HandleGetSearchableServices(w, r, dbConn)
 	})
-	http.HandleFunc("/services/excluded", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/services/excluded", func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Handling excluded services request: %s", r.URL.String())
 		handlers.HandleGetExcludedServices(w, r, dbConn)
 	})
-	http.HandleFunc("/services/exclude", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/services/exclude", func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Handling add excluded service request: %s", r.URL.String())
 		handlers.HandleAddExcludedService(w, r, dbConn)
 	})
-	http.HandleFunc("/services/unexclude", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/services/unexclude", func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Handling remove excluded service request: %s", r.URL.String())
 		handlers.HandleRemoveExcludedService(w, r, dbConn)
 	})
-	http.HandleFunc("/program/", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/program/", func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Handling IEPG request: %s", r.URL.String())
 		handlers.HandleIEPG(w, r, dbConn)
 	})
-	http.Handle("/rpc", handlers.NewRPCServer(dbConn))
+	router.Handle("/rpc", handlers.NewRPCServer(dbConn))
+
+	// 予約関連のエンドポイント
+	router.HandleFunc("/reservations", reservationHandler.CreateReservation).Methods("POST")
+	router.HandleFunc("/reservations", reservationHandler.GetReservations).Methods("GET")
+	router.HandleFunc("/reservations/{id}", reservationHandler.DeleteReservation).Methods("DELETE")
 
 	// 静的ファイルの提供
 	fs := http.FileServer(http.Dir("./static"))
-	http.Handle("/static/", http.StripPrefix("/static/", fs))
+	router.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
 
 	// Web UI のルート
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
 			models.Log.Debug("Redirecting root path to search UI")
 			http.Redirect(w, r, "/ui/search", http.StatusFound)
@@ -144,13 +163,13 @@ func main() {
 	})
 
 	// 検索UI
-	http.HandleFunc("/ui/search", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/ui/search", func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Serving search UI")
 		http.ServeFile(w, r, "./static/search.html")
 	})
 
 	// チャンネル除外設定UI
-	http.HandleFunc("/ui/exclude-channels", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/ui/exclude-channels", func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Serving exclude channels UI")
 		http.ServeFile(w, r, "./static/exclude-channels.html")
 	})
@@ -162,7 +181,7 @@ func main() {
 		port = "8080"
 	}
 	models.Log.Info("Listening on :%s", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	if err := http.ListenAndServe(":"+port, router); err != nil {
 		models.Log.Error("Server error: %v", err)
 		log.Fatal(err)
 	}
