@@ -174,9 +174,10 @@ docker run --rm iepg-server-test
 
 ### IEPG API
 
-**エンドポイント**: `/program/{id}`  
-**メソッド**: GET  
-**説明**: 指定されたIDの番組情報をIEPG形式で取得します。
+**エンドポイント**: `/program/{id}.tvpid`
+**メソッド**: GET
+**説明**: 指定されたIDの番組情報をIEPG形式で取得します。拡張子を付けない
+`/program/{id}` も後方互換のため利用可能です。
 
 **パスパラメータ**:
 - `id`: 番組ID
