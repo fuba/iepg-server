@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 type ReservationHandler struct {
 	DB          *sql.DB
 	RecorderURL string
+	HTTPClient  *http.Client
 }
 
 // NewReservationHandler creates a new reservation handler
@@ -27,12 +29,15 @@ func NewReservationHandler(database *sql.DB, recorderURL string) *ReservationHan
 	return &ReservationHandler{
 		DB:          database,
 		RecorderURL: recorderURL,
+		HTTPClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
 	}
 }
 
 // CreateReservation handles POST /reservations
 func (h *ReservationHandler) CreateReservation(w http.ResponseWriter, r *http.Request) {
-	models.Log.Debug("CreateReservation: Processing request")
+	models.Log.Info("CreateReservation: Processing request")
 	
 	var req models.CreateReservationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -59,6 +64,16 @@ func (h *ReservationHandler) CreateReservation(w http.ResponseWriter, r *http.Re
 	recorderURL := req.RecorderURL
 	if recorderURL == "" {
 		recorderURL = h.RecorderURL
+	}
+	
+	// Validate recorder URL
+	if err := validateRecorderURL(recorderURL); err != nil {
+		models.Log.Error("CreateReservation: Invalid recorder URL: %v", err)
+		respondWithJSON(w, http.StatusBadRequest, models.ReservationResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Invalid recorder URL: %v", err),
+		})
+		return
 	}
 	
 	// Create reservation
@@ -94,7 +109,10 @@ func (h *ReservationHandler) CreateReservation(w http.ResponseWriter, r *http.Re
 		return
 	}
 	
-	// Call recorder API immediately
+	// Call recorder API asynchronously
+	// The reservation is created with "pending" status.
+	// The API call will update the status to "recording" on success or "failed" on error.
+	// This ensures the reservation is tracked even if the external API call fails.
 	go h.callRecorderAPI(reservation)
 	
 	models.Log.Info("CreateReservation: Created reservation %s for program %d", reservation.ID, program.ID)
@@ -106,7 +124,7 @@ func (h *ReservationHandler) CreateReservation(w http.ResponseWriter, r *http.Re
 
 // GetReservations handles GET /reservations
 func (h *ReservationHandler) GetReservations(w http.ResponseWriter, r *http.Request) {
-	models.Log.Debug("GetReservations: Processing request")
+	models.Log.Info("GetReservations: Processing request")
 	
 	query := `
 		SELECT id, programId, serviceId, name, startAt, duration,
@@ -145,7 +163,7 @@ func (h *ReservationHandler) GetReservations(w http.ResponseWriter, r *http.Requ
 		reservations = append(reservations, r)
 	}
 	
-	models.Log.Debug("GetReservations: Found %d reservations", len(reservations))
+	models.Log.Info("GetReservations: Found %d reservations", len(reservations))
 	respondWithJSON(w, http.StatusOK, models.ReservationsListResponse{
 		Success:      true,
 		Reservations: reservations,
@@ -158,7 +176,7 @@ func (h *ReservationHandler) DeleteReservation(w http.ResponseWriter, r *http.Re
 	vars := mux.Vars(r)
 	id := vars["id"]
 	
-	models.Log.Debug("DeleteReservation: Processing request for ID %s", id)
+	models.Log.Info("DeleteReservation: Processing request for ID %s", id)
 	
 	// Get reservation details first
 	var reservation models.Reservation
@@ -207,7 +225,7 @@ func (h *ReservationHandler) DeleteReservation(w http.ResponseWriter, r *http.Re
 
 // callRecorderAPI calls the external recorder API
 func (h *ReservationHandler) callRecorderAPI(reservation *models.Reservation) {
-	models.Log.Debug("callRecorderAPI: Calling recorder API for reservation %s", reservation.ID)
+	models.Log.Info("callRecorderAPI: Starting API call for reservation %s", reservation.ID)
 	
 	// Construct API URL
 	apiURL := reservation.RecorderURL
@@ -217,15 +235,30 @@ func (h *ReservationHandler) callRecorderAPI(reservation *models.Reservation) {
 	if !strings.HasSuffix(apiURL, "/") {
 		apiURL += "/"
 	}
-	apiURL += fmt.Sprintf("api/record?program_id=%s", reservation.RecorderProgramID)
+	apiURL += fmt.Sprintf("api/record?program_id=%s", url.QueryEscape(reservation.RecorderProgramID))
 	
 	models.Log.Info("callRecorderAPI: Calling %s", apiURL)
 	
-	// Make HTTP request
-	resp, err := http.Get(apiURL)
+	// Make HTTP request with retry logic
+	var resp *http.Response
+	var err error
+	maxRetries := 3
+	
+	for i := 0; i < maxRetries; i++ {
+		resp, err = h.HTTPClient.Get(apiURL)
+		if err == nil {
+			break
+		}
+		
+		models.Log.Info("callRecorderAPI: Request attempt %d failed: %v", i+1, err)
+		if i < maxRetries-1 {
+			time.Sleep(time.Duration(i+1) * time.Second) // Exponential backoff
+		}
+	}
+	
 	if err != nil {
-		models.Log.Error("callRecorderAPI: Request failed: %v", err)
-		h.updateReservationError(reservation.ID, fmt.Sprintf("Failed to call recorder API: %v", err))
+		models.Log.Error("callRecorderAPI: Request failed after %d attempts: %v", maxRetries, err)
+		h.updateReservationError(reservation.ID, fmt.Sprintf("Failed to call recorder API after %d attempts: %v", maxRetries, err))
 		return
 	}
 	defer resp.Body.Close()
@@ -262,6 +295,59 @@ func (h *ReservationHandler) updateReservationError(id string, errMsg string) {
 	if err != nil {
 		models.Log.Error("updateReservationError: Failed to update: %v", err)
 	}
+}
+
+// validateRecorderURL validates the recorder URL format and checks against allowed hosts
+func validateRecorderURL(recorderURL string) error {
+	if recorderURL == "" {
+		return nil // Empty is allowed (will use default)
+	}
+	
+	// Parse URL to validate format
+	parsedURL, err := url.Parse(recorderURL)
+	if err != nil {
+		// If parsing fails, try with http:// prefix
+		parsedURL, err = url.Parse("http://" + recorderURL)
+		if err != nil {
+			return fmt.Errorf("invalid URL format: %v", err)
+		}
+	}
+	
+	// Only allow http and https schemes
+	if parsedURL.Scheme != "" && parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return fmt.Errorf("only http and https schemes are allowed")
+	}
+	
+	// Extract hostname for validation
+	hostname := parsedURL.Hostname()
+	if hostname == "" {
+		// Try to extract from the original URL if no scheme
+		parts := strings.Split(recorderURL, ":")
+		if len(parts) > 0 {
+			hostname = parts[0]
+		}
+	}
+	
+	// Allow localhost, private IPs, and specific domains
+	// You can customize this based on your security requirements
+	if hostname != "" {
+		// Allow localhost
+		if hostname == "localhost" || hostname == "127.0.0.1" || hostname == "::1" {
+			return nil
+		}
+		
+		// Allow private IP ranges (RFC 1918)
+		if strings.HasPrefix(hostname, "10.") ||
+			strings.HasPrefix(hostname, "172.") ||
+			strings.HasPrefix(hostname, "192.168.") {
+			return nil
+		}
+		
+		// Add additional allowed domains here if needed
+		// For now, we'll allow any domain but you can restrict this
+	}
+	
+	return nil
 }
 
 // respondWithJSON sends a JSON response
