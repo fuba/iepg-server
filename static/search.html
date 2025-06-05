@@ -534,7 +534,7 @@
                 const programName = e.target.dataset.programName;
                 
                 // 録画サーバーのURLを入力するダイアログ
-                const recorderUrl = prompt('録画サーバーのURLを入力してください\n(例: http://puma2:37569)\n空欄の場合は環境変数で設定されたデフォルトを使用します。', 'http://puma2:37569');
+                const recorderUrl = prompt('録画サーバーのURLを入力してください\n(例: http://localhost:37569)\n空欄の場合は環境変数で設定されたデフォルトを使用します。', 'http://localhost:37569');
                 
                 if (recorderUrl !== null) { // nullはキャンセルボタンが押された場合
                     // 予約処理
