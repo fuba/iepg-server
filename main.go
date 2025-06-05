@@ -72,11 +72,11 @@ func main() {
 	// ストリーム購読開始（無限リトライ）
 	models.Log.Info("Starting stream fetcher...")
 	go db.StartStreamFetcher(ctx, dbConn, streamURL)
-	
+
 	// サービス情報の取得開始
 	models.Log.Info("Starting service fetcher...")
 	go db.StartServiceFetcher(ctx, mirakurunURL)
-	
+
 	// サービスイベントストリームの購読開始
 	models.Log.Info("Starting service event stream...")
 	go db.StartServiceEventStream(ctx, mirakurunURL)
@@ -178,7 +178,7 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "40870" // default port when PORT is unset
 	}
 	models.Log.Info("Listening on :%s", port)
 	if err := http.ListenAndServe(":"+port, router); err != nil {

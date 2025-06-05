@@ -19,45 +19,45 @@ import (
 // HandleIEPG は /program/{id}.tvpid エンドポイントのハンドラー
 func HandleIEPG(w http.ResponseWriter, r *http.Request, dbConn *sql.DB) {
 	models.Log.Debug("HandleIEPG: Processing request from %s: %s", r.RemoteAddr, r.URL.Path)
-	
+
 	// URL例: /program/123.tvpid
 	path := r.URL.Path
 	idStr := strings.TrimPrefix(path, "/program/")
 	idStr = strings.TrimSuffix(idStr, ".tvpid")
-	
+
 	models.Log.Debug("HandleIEPG: Extracted program ID: %s", idStr)
-	
+
 	if idStr == "" {
 		models.Log.Error("HandleIEPG: Program ID not provided")
 		http.Error(w, "program id not provided", http.StatusBadRequest)
 		return
 	}
-	
+
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		models.Log.Error("HandleIEPG: Invalid program ID: %s, error: %v", idStr, err)
 		http.Error(w, "invalid program id", http.StatusBadRequest)
 		return
 	}
-	
+
 	models.Log.Debug("HandleIEPG: Looking up program with ID: %d", id)
-	
+
 	p, err := db.GetProgramByID(dbConn, id)
 	if err != nil {
 		models.Log.Error("HandleIEPG: Program not found, ID: %d, error: %v", id, err)
 		http.Error(w, "program not found", http.StatusNotFound)
 		return
 	}
-	
+
 	models.Log.Info("HandleIEPG: Found program: ID=%d, Name=%s", p.ID, p.Name)
 
 	// 開始時刻と終了時刻の算出
 	startTime := time.UnixMilli(p.StartAt)
 	endTime := startTime.Add(time.Duration(p.Duration) * time.Millisecond)
-	
-	models.Log.Debug("HandleIEPG: Program times - Start: %s, End: %s", 
+
+	models.Log.Debug("HandleIEPG: Program times - Start: %s, End: %s",
 		startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
-		
+
 	// 特殊文字を適切な代替表現に置換
 	sanitizedName := normalizeSpecialCharacters(p.Name)
 	sanitizedDescription := normalizeSpecialCharacters(p.Description)
@@ -78,8 +78,8 @@ func HandleIEPG(w http.ResponseWriter, r *http.Request, dbConn *sql.DB) {
 		serviceId = service.ServiceID
 		channelType = service.ChannelType
 		channelNumber = service.ChannelNumber
-		
-		models.Log.Debug("HandleIEPG: Found service: ID=%d, Name=%s, RemoteControlKeyID=%d", 
+
+		models.Log.Debug("HandleIEPG: Found service: ID=%d, Name=%s, RemoteControlKeyID=%d",
 			service.ServiceID, service.Name, service.RemoteControlKeyID)
 	} else {
 		// サービス情報が見つからない場合はダミー情報を使用
@@ -90,7 +90,7 @@ func HandleIEPG(w http.ResponseWriter, r *http.Request, dbConn *sql.DB) {
 		channelNumber = "0"
 		models.Log.Debug("HandleIEPG: Service not found for ServiceID=%d, using dummy station info", p.ServiceID)
 	}
-	
+
 	// 簡易 iEPG 出力
 	iepg := "Content-type: application/x-tv-program-digital-info; charset=shift_jis\r\n"
 	iepg += "version: 2\r\n"
@@ -110,12 +110,12 @@ func HandleIEPG(w http.ResponseWriter, r *http.Request, dbConn *sql.DB) {
 	if sanitizedDescription != "" {
 		iepg += "\r\n" + sanitizedDescription + "\r\n"
 	}
-	
+
 	models.Log.Debug("HandleIEPG: Generated iEPG data:\n%s", iepg)
 
 	// すべての文字列をShift-JIS安全な文字に変換
 	iepg = sanitizeForShiftJIS(iepg)
-	
+
 	// Shift_JISにエンコードして出力
 	w.Header().Set("Content-Type", "application/x-tv-program-digital-info; charset=shift_jis")
 	encoder := japanese.ShiftJIS.NewEncoder()
@@ -125,7 +125,7 @@ func HandleIEPG(w http.ResponseWriter, r *http.Request, dbConn *sql.DB) {
 		http.Error(w, "encoding error", http.StatusInternalServerError)
 		return
 	}
-	
+
 	models.Log.Debug("HandleIEPG: Successfully encoded to Shift-JIS, sending response")
 	w.Write([]byte(sjisData))
 	models.Log.Debug("HandleIEPG: Response sent successfully")
@@ -145,19 +145,13 @@ func normalizeSpecialCharacters(s string) string {
 	result.Grow(len(s))
 
 	for _, r := range s {
-		// ARIB外字コード範囲のチェック (0x7A50-0x7E7D)
-		if (r >= 0x7A50 && r <= 0x7A7B) || 
-		   (r >= 0x7C21 && r <= 0x7C7B) || 
-		   (r >= 0x7D21 && r <= 0x7D7B) || 
-		   (r >= 0x7E21 && r <= 0x7E7D) {
-			// ARIB外字マップから変換
-			if replacement, ok := models.ARIBGaijiMapAll[r]; ok {
-				result.WriteString(replacement)
-			} else {
-				// マップにない場合は「・」で代替
-				result.WriteString("・")
-			}
-		} else if r >= 0x1F000 { 
+		// まずARIB外字マップに登録されているか確認
+		if replacement, ok := models.ARIBGaijiMapAll[r]; ok {
+			result.WriteString(replacement)
+			continue
+		}
+
+		if r >= 0x1F000 {
 			// Unicode絵文字範囲 (Emoji, Pictographs, etc.)
 			if replacement, ok := models.ARIBGaijiMapAll[r]; ok {
 				// マップに登録されている場合はその変換を使用
@@ -166,7 +160,7 @@ func normalizeSpecialCharacters(s string) string {
 				// Enclosed Ideographic Supplement (特に囲み漢字)
 				// 対応する漢字を取得して囲み形式にする
 				var baseChar rune
-				
+
 				// 代表的な漢字コード (参考情報)
 				switch r {
 				case 0x1F200: // SQUARED HIRAGANA HOKA
@@ -207,7 +201,7 @@ func normalizeSpecialCharacters(s string) string {
 					result.WriteString("[囲漢字]")
 					continue
 				}
-				
+
 				// 対応する漢字を[]で囲む
 				result.WriteString("[" + string(baseChar) + "]")
 			} else {
@@ -230,7 +224,7 @@ func sanitizeForShiftJIS(s string) string {
 	result.Grow(len(s))
 
 	encoder := japanese.ShiftJIS.NewEncoder()
-	
+
 	for _, r := range s {
 		// ARIB外字コード範囲はすでに処理済みと想定（normalizeSpecialCharactersで処理）
 		// 文字ごとにShift-JISエンコード可能かテストする
@@ -239,7 +233,7 @@ func sanitizeForShiftJIS(s string) string {
 			result.WriteRune(r)
 		} else {
 			// エンコード不可能な文字を処理
-			
+
 			// ARIB外字マップにある文字の場合は対応する変換を使用
 			if replacement, ok := models.ARIBGaijiMapAll[r]; ok {
 				// 変換後の文字列がShift-JISエンコード可能かテスト
@@ -249,7 +243,7 @@ func sanitizeForShiftJIS(s string) string {
 				}
 				// エンコード不可能な場合は以降の処理に進む
 			}
-			
+
 			// Unicode絵文字（U+1F000以降）
 			if r >= 0x1F000 {
 				result.WriteString("[絵文字]")

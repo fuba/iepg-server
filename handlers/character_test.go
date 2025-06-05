@@ -19,6 +19,11 @@ func TestNormalizeSpecialCharacters(t *testing.T) {
 			expected: "普通のテキスト",
 		},
 		{
+			name:     "ARIB範囲に重なる通常の漢字",
+			input:    "今日は空が青い",
+			expected: "今日は空が青い",
+		},
+		{
 			name:     "Unicodeの囲み漢字",
 			input:    "🈚🈯🈲🈳🈴🈵 テスト",
 			expected: "[無][指][禁][空][合][満] テスト",
@@ -78,7 +83,7 @@ func TestSanitizeForShiftJIS(t *testing.T) {
 		},
 		{
 			name:     "JIS第1・第2水準外の漢字",
-			input:    "𠮟",  // 「叱」の異体字
+			input:    "𠮟",     // 「叱」の異体字
 			expected: "[絵文字]", // UTF-8の表現がU+20B9F（0x1 = 1F000以上）なので[絵文字]となる
 		},
 		{
@@ -106,7 +111,7 @@ func TestSanitizeForShiftJIS(t *testing.T) {
 			if tt.name == "ARIB外字コード (直接使用)" {
 				t.Skip("このテストは環境依存のためスキップします")
 			}
-			
+
 			result := sanitizeForShiftJIS(tt.input)
 			if result != tt.expected {
 				t.Errorf("sanitizeForShiftJIS(%q) = %q, expected %q", tt.input, result, tt.expected)
@@ -150,13 +155,13 @@ func TestIntegrationSpecialCharactersToShiftJIS(t *testing.T) {
 			if tt.name == "ARIB外字とUnicode絵文字の混在" || tt.name == "通常テキストとARIB外字の複合" {
 				t.Skip("このテストは環境依存のためスキップします")
 			}
-			
+
 			// 二段階の変換を行う
 			normalized := normalizeSpecialCharacters(tt.input)
 			sanitized := sanitizeForShiftJIS(normalized)
-			
+
 			if sanitized != tt.expected {
-				t.Errorf("Integration test failed for %q:\nNormalized: %q\nSanitized: %q\nExpected: %q", 
+				t.Errorf("Integration test failed for %q:\nNormalized: %q\nSanitized: %q\nExpected: %q",
 					tt.input, normalized, sanitized, tt.expected)
 			}
 		})
@@ -167,10 +172,10 @@ func TestIntegrationSpecialCharactersToShiftJIS(t *testing.T) {
 func TestARIBGaijiMapInitialization(t *testing.T) {
 	// マップに期待されるキーがあるかどうかを確認
 	expectedKeys := []rune{
-		0x7A50, // [HV]
-		0x7A51, // [SD]
-		0x7A65, // [無]
-		0x7C21, // →
+		0x7A50,  // [HV]
+		0x7A51,  // [SD]
+		0x7A65,  // [無]
+		0x7C21,  // →
 		0x1F21A, // 🈚 (無)
 		0x1F22F, // 🈯 (指)
 	}

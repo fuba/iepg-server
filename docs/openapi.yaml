@@ -220,10 +220,12 @@ paths:
           description: 不正なリクエストパラメータ
         '500':
           description: サーバーエラー
-  /program/{id}:
+  /program/{id}.tvpid:
     get:
       summary: IEPG形式の番組情報取得
-      description: 指定されたIDの番組情報をIEPG形式で取得します
+      description: >-
+        指定されたIDの番組情報をIEPG形式で取得します。拡張子を付けない
+        `/program/{id}` も後方互換のため利用可能です
       tags:
         - programs
       parameters:
