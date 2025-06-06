@@ -137,7 +137,7 @@ func main() {
 		models.Log.Debug("Handling remove excluded service request: %s", r.URL.String())
 		handlers.HandleRemoveExcludedService(w, r, dbConn)
 	})
-	router.HandleFunc("/program/", func(w http.ResponseWriter, r *http.Request) {
+	router.PathPrefix("/program/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Handling IEPG request: %s", r.URL.String())
 		handlers.HandleIEPG(w, r, dbConn)
 	})
