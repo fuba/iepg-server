@@ -128,6 +128,8 @@
     <script>
         // DOMロード時の処理
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM content loaded, initializing page');
+            
             // フィルタボタンのイベント設定
             setupFilterButtons();
             
@@ -138,6 +140,7 @@
             document.getElementById('clearAllExcludes').addEventListener('click', clearAllExcludes);
             
             // 初期データの読み込み
+            console.log('Loading initial data');
             loadAllData();
         });
         
@@ -266,6 +269,12 @@
                     button.addEventListener('click', function() {
                         const serviceId = parseInt(this.dataset.serviceId);
                         const serviceName = this.dataset.serviceName;
+                        console.log('Exclude button clicked for serviceId:', serviceId, 'serviceName:', serviceName);
+                        if (isNaN(serviceId)) {
+                            console.error('Invalid serviceId:', this.dataset.serviceId);
+                            showToast('エラー: 無効なサービスIDです', true);
+                            return;
+                        }
                         excludeChannel(serviceId, serviceName);
                     });
                 });
@@ -364,6 +373,12 @@
                 document.querySelectorAll('.unexclude-btn').forEach(button => {
                     button.addEventListener('click', function() {
                         const serviceId = parseInt(this.dataset.serviceId);
+                        console.log('Unexclude button clicked for serviceId:', serviceId);
+                        if (isNaN(serviceId)) {
+                            console.error('Invalid serviceId:', this.dataset.serviceId);
+                            showToast('エラー: 無効なサービスIDです', true);
+                            return;
+                        }
                         unexcludeChannel(serviceId);
                     });
                 });
@@ -375,21 +390,33 @@
         
         // チャンネルを除外リストに追加
         async function excludeChannel(serviceId, serviceName) {
+            console.log('excludeChannel called with serviceId:', serviceId, 'serviceName:', serviceName);
             try {
+                const requestBody = JSON.stringify({
+                    serviceId: serviceId,
+                    name: serviceName
+                });
+                console.log('Sending request to /services/exclude with body:', requestBody);
+                
                 const response = await fetch('/services/exclude', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        serviceId: serviceId,
-                        name: serviceName
-                    })
+                    body: requestBody
                 });
                 
+                console.log('Response status:', response.status);
+                console.log('Response ok:', response.ok);
+                
                 if (!response.ok) {
-                    throw new Error('チャンネルの除外に失敗しました: ' + response.status);
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
+                    throw new Error('チャンネルの除外に失敗しました: ' + response.status + ' - ' + errorText);
                 }
+                
+                const responseData = await response.json();
+                console.log('Success response:', responseData);
                 
                 // 成功したら両方のリストを再読み込み
                 await loadAllData();
@@ -397,26 +424,38 @@
                 
             } catch (error) {
                 console.error('チャンネル除外エラー:', error);
-                showToast('エラー: チャンネルの除外に失敗しました', true);
+                showToast('エラー: チャンネルの除外に失敗しました - ' + error.message, true);
             }
         }
         
         // チャンネルの除外を解除
         async function unexcludeChannel(serviceId) {
+            console.log('unexcludeChannel called with serviceId:', serviceId);
             try {
+                const requestBody = JSON.stringify({
+                    serviceId: serviceId
+                });
+                console.log('Sending request to /services/unexclude with body:', requestBody);
+                
                 const response = await fetch('/services/unexclude', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        serviceId: serviceId
-                    })
+                    body: requestBody
                 });
                 
+                console.log('Response status:', response.status);
+                console.log('Response ok:', response.ok);
+                
                 if (!response.ok) {
-                    throw new Error('チャンネルの除外解除に失敗しました: ' + response.status);
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
+                    throw new Error('チャンネルの除外解除に失敗しました: ' + response.status + ' - ' + errorText);
                 }
+                
+                const responseData = await response.json();
+                console.log('Success response:', responseData);
                 
                 // 成功したら両方のリストを再読み込み
                 await loadAllData();
@@ -424,32 +463,40 @@
                 
             } catch (error) {
                 console.error('チャンネル除外解除エラー:', error);
-                showToast('エラー: チャンネルの除外解除に失敗しました', true);
+                showToast('エラー: チャンネルの除外解除に失敗しました - ' + error.message, true);
             }
         }
         
         // すべての除外を解除
         async function clearAllExcludes() {
+            console.log('clearAllExcludes called');
             if (!confirm('すべてのチャンネルの除外設定を解除します。よろしいですか？')) {
+                console.log('User cancelled clear all operation');
                 return;
             }
             
             try {
                 // 除外されているすべてのチャンネルを取得
+                console.log('Fetching excluded services');
                 const response = await fetch('/services/excluded');
                 if (!response.ok) {
                     throw new Error('除外チャンネル一覧の取得に失敗しました: ' + response.status);
                 }
                 
                 const excludedServices = await response.json();
+                console.log('Found excluded services:', excludedServices);
+                
                 if (excludedServices.length === 0) {
+                    console.log('No excluded services found');
                     showToast('除外しているチャンネルはありません');
                     return;
                 }
                 
                 // すべての除外を解除
-                const promises = excludedServices.map(service => 
-                    fetch('/services/unexclude', {
+                console.log('Clearing all excluded services:', excludedServices.length);
+                const promises = excludedServices.map(service => {
+                    console.log('Unexcluding service:', service.serviceId);
+                    return fetch('/services/unexclude', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -457,10 +504,21 @@
                         body: JSON.stringify({
                             serviceId: service.serviceId
                         })
-                    })
-                );
+                    });
+                });
                 
-                await Promise.all(promises);
+                const results = await Promise.all(promises);
+                console.log('All unexclude requests completed:', results.length);
+                
+                // レスポンスの詳細をチェック
+                for (let i = 0; i < results.length; i++) {
+                    const result = results[i];
+                    if (!result.ok) {
+                        console.error(`Failed to unexclude service ${excludedServices[i].serviceId}: ${result.status}`);
+                    } else {
+                        console.log(`Successfully unexcluded service ${excludedServices[i].serviceId}`);
+                    }
+                }
                 
                 // 成功したら両方のリストを再読み込み
                 await loadAllData();
@@ -468,7 +526,7 @@
                 
             } catch (error) {
                 console.error('すべての除外解除エラー:', error);
-                showToast('エラー: 一部のチャンネルの除外解除に失敗しました', true);
+                showToast('エラー: 一部のチャンネルの除外解除に失敗しました - ' + error.message, true);
             }
         }
         
