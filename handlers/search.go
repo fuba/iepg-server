@@ -124,6 +124,7 @@ func HandleSimpleSearch(w http.ResponseWriter, r *http.Request, dbConn *sql.DB) 
 }
 
 // HandleGetServices はすべてのサービス情報を返すハンドラー
+// 除外チャンネルを除いたサービス一覧を返す
 func HandleGetServices(w http.ResponseWriter, r *http.Request, dbConn *sql.DB) {
 	models.Log.Debug("HandleGetServices: Processing request from %s", r.RemoteAddr)
 	
@@ -131,6 +132,7 @@ func HandleGetServices(w http.ResponseWriter, r *http.Request, dbConn *sql.DB) {
 	excludedTypes := []int{192}
 	
 	// すべてのサービスを取得（タイプ192および除外チャンネルを除く）
+	// GetFilteredServicesは除外チャンネルも自動的に除外する
 	services := db.GetFilteredServices(dbConn, nil, excludedTypes)
 	
 	// デバッグ: サービスタイプ情報をログに出力
