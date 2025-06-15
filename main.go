@@ -13,6 +13,7 @@ import (
 	"github.com/fuba/iepg-server/db"
 	"github.com/fuba/iepg-server/handlers"
 	"github.com/fuba/iepg-server/models"
+	"github.com/fuba/iepg-server/services"
 )
 
 func main() {
@@ -105,6 +106,21 @@ func main() {
 	// 予約ハンドラーの初期化
 	reservationHandler := handlers.NewReservationHandler(dbConn, recorderURL)
 
+	// 自動予約エンジンの初期化と開始
+	autoReservationEngine := services.NewAutoReservationEngine(dbConn, recorderURL)
+	autoReservationEnabledStr := os.Getenv("ENABLE_AUTO_RESERVATION")
+	autoReservationEnabled := true // デフォルトは有効
+	if autoReservationEnabledStr == "0" || autoReservationEnabledStr == "false" {
+		autoReservationEnabled = false
+	}
+
+	if autoReservationEnabled {
+		models.Log.Info("Starting auto reservation engine...")
+		go autoReservationEngine.Start(ctx)
+	} else {
+		models.Log.Info("Auto reservation engine disabled (ENABLE_AUTO_RESERVATION=%s)", autoReservationEnabledStr)
+	}
+
 	// ルーターの設定
 	router := mux.NewRouter()
 
@@ -147,6 +163,14 @@ func main() {
 	router.HandleFunc("/reservations", reservationHandler.CreateReservation).Methods("POST")
 	router.HandleFunc("/reservations", reservationHandler.GetReservations).Methods("GET")
 	router.HandleFunc("/reservations/{id}", reservationHandler.DeleteReservation).Methods("DELETE")
+
+	// 自動予約関連のエンドポイント
+	router.HandleFunc("/auto-reservations/rules", handlers.HandleCreateAutoReservationRule(dbConn)).Methods("POST")
+	router.HandleFunc("/auto-reservations/rules", handlers.HandleGetAutoReservationRules(dbConn)).Methods("GET")
+	router.HandleFunc("/auto-reservations/rules/{id}", handlers.HandleGetAutoReservationRule(dbConn)).Methods("GET")
+	router.HandleFunc("/auto-reservations/rules/{id}", handlers.HandleUpdateAutoReservationRule(dbConn)).Methods("PUT")
+	router.HandleFunc("/auto-reservations/rules/{id}", handlers.HandleDeleteAutoReservationRule(dbConn)).Methods("DELETE")
+	router.HandleFunc("/auto-reservations/logs", handlers.HandleGetAutoReservationLogs(dbConn)).Methods("GET")
 
 	// 静的ファイルの提供
 	fs := http.FileServer(http.Dir("./static"))
