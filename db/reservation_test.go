@@ -8,6 +8,11 @@ import (
 	"github.com/fuba/iepg-server/models"
 )
 
+func init() {
+	// テスト用にロガーを初期化
+	models.InitLogger("debug")
+}
+
 func TestReservationDatabase(t *testing.T) {
 	// Initialize test database
 	db, err := InitDB(":memory:")

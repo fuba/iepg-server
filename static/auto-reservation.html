@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自動予約管理</title>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .rule-card {
+            border-left: 5px solid #007bff;
+            margin-bottom: 1rem;
+        }
+        .rule-card.disabled {
+            border-left-color: #6c757d;
+            opacity: 0.7;
+        }
+        .keyword-tag {
+            background-color: #e3f2fd;
+            border: 1px solid #2196f3;
+            border-radius: 12px;
+            padding: 2px 8px;
+            margin: 2px;
+            display: inline-block;
+            font-size: 0.85em;
+        }
+        .exclude-tag {
+            background-color: #ffebee;
+            border: 1px solid #f44336;
+            border-radius: 12px;
+            padding: 2px 8px;
+            margin: 2px;
+            display: inline-block;
+            font-size: 0.85em;
+        }
+        .service-tag {
+            background-color: #f3e5f5;
+            border: 1px solid #9c27b0;
+            border-radius: 12px;
+            padding: 2px 8px;
+            margin: 2px;
+            display: inline-block;
+            font-size: 0.85em;
+        }
+        .nav-pills .nav-link {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">iEPG Server</a>
+                <div class="navbar-nav">
+                    <a class="nav-link" href="/ui/search">番組検索</a>
+                    <a class="nav-link" href="/ui/exclude-channels">除外チャンネル</a>
+                    <a class="nav-link active" href="/ui/auto-reservation">自動予約</a>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container-fluid mt-4">
+            <h1>自動予約管理</h1>
+            
+            <!-- ナビゲーションタブ -->
+            <ul class="nav nav-pills mb-4" id="autoReservationTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="rules-tab" data-bs-toggle="pill" data-bs-target="#rules" type="button" role="tab">ルール管理</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="logs-tab" data-bs-toggle="pill" data-bs-target="#logs" type="button" role="tab">実行ログ</button>
+                </li>
+            </ul>
+
+            <!-- タブコンテンツ -->
+            <div class="tab-content" id="autoReservationTabContent">
+                <!-- ルール管理タブ -->
+                <div class="tab-pane fade show active" id="rules" role="tabpanel">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3>自動予約ルール</h3>
+                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#ruleModal" onclick="openCreateRuleModal()">
+                            + 新しいルールを作成
+                        </button>
+                    </div>
+                    
+                    <div id="rulesContainer">
+                        <div class="text-center py-4">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">ルールを読み込み中...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 実行ログタブ -->
+                <div class="tab-pane fade" id="logs" role="tabpanel">
+                    <h3>実行ログ</h3>
+                    <div id="logsContainer">
+                        <div class="text-center py-4">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">ログを読み込み中...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ルール作成・編集モーダル -->
+    <div class="modal fade" id="ruleModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="ruleModalTitle">新しいルールを作成</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="ruleForm">
+                        <input type="hidden" id="ruleId">
+                        
+                        <!-- 基本設定 -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="ruleName" class="form-label">ルール名 *</label>
+                                <input type="text" class="form-control" id="ruleName" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="ruleType" class="form-label">タイプ *</label>
+                                <select class="form-select" id="ruleType" required onchange="toggleRuleTypeFields()">
+                                    <option value="keyword">キーワード</option>
+                                    <option value="series">シリーズ</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="rulePriority" class="form-label">優先度</label>
+                                <input type="number" class="form-control" id="rulePriority" value="10" min="1" max="100">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="recorderUrl" class="form-label">録画サーバーURL *</label>
+                                <input type="url" class="form-control" id="recorderUrl" value="http://localhost:37569" required>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check mt-4">
+                                    <input class="form-check-input" type="checkbox" id="ruleEnabled" checked>
+                                    <label class="form-check-label" for="ruleEnabled">
+                                        有効
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- キーワードルール設定 -->
+                        <div id="keywordRuleFields">
+                            <h6>キーワード設定</h6>
+                            <div class="mb-3">
+                                <label for="keywords" class="form-label">検索キーワード *</label>
+                                <input type="text" class="form-control" id="keywords" placeholder="カンマ区切りで入力 (例: アニメ,ドラマ)">
+                                <div class="form-text">全てのキーワードを含む番組が対象になります</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="excludeWords" class="form-label">除外ワード</label>
+                                <input type="text" class="form-control" id="excludeWords" placeholder="カンマ区切りで入力 (例: 再放送,総集編)">
+                                <div class="form-text">これらのワードを含む番組は除外されます</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="serviceIds" class="form-label">対象チャンネル</label>
+                                <input type="text" class="form-control" id="serviceIds" placeholder="サービスIDをカンマ区切りで入力 (例: 700333,700330)">
+                                <div class="form-text">空の場合は全チャンネルが対象になります</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="genres" class="form-label">対象ジャンル</label>
+                                <input type="text" class="form-control" id="genres" placeholder="ジャンルIDをカンマ区切りで入力 (例: 1,2,7)">
+                                <div class="form-text">空の場合は全ジャンルが対象になります</div>
+                            </div>
+                        </div>
+
+                        <!-- シリーズルール設定 -->
+                        <div id="seriesRuleFields" style="display: none;">
+                            <h6>シリーズ設定</h6>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="seriesId" class="form-label">シリーズID *</label>
+                                    <input type="text" class="form-control" id="seriesId">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="programName" class="form-label">番組名</label>
+                                    <input type="text" class="form-control" id="programName">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="seriesServiceId" class="form-label">対象チャンネル</label>
+                                <input type="number" class="form-control" id="seriesServiceId" placeholder="サービスID (例: 700333)">
+                                <div class="form-text">空の場合は全チャンネルが対象になります</div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-primary" onclick="saveRule()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let rules = [];
+        let logs = [];
+        let editingRuleId = null;
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadRules();
+            
+            // タブ切り替え時にログを読み込む
+            document.getElementById('logs-tab').addEventListener('shown.bs.tab', function () {
+                loadLogs();
+            });
+        });
+
+        // ルール一覧の読み込み
+        async function loadRules() {
+            try {
+                const response = await fetch('/auto-reservations/rules');
+                if (response.ok) {
+                    rules = await response.json() || [];
+                    renderRules();
+                } else {
+                    showError('ルールの読み込みに失敗しました');
+                }
+            } catch (error) {
+                showError('ネットワークエラー: ' + error.message);
+            }
+        }
+
+        // ルール一覧の表示
+        function renderRules() {
+            const container = document.getElementById('rulesContainer');
+            
+            if (rules.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-5">
+                        <h5>自動予約ルールがありません</h5>
+                        <p class="text-muted">「新しいルールを作成」ボタンから最初のルールを作成してください。</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const rulesHtml = rules.map(rule => {
+                const cardClass = rule.enabled ? 'rule-card' : 'rule-card disabled';
+                let ruleDetails = '';
+                
+                if (rule.type === 'keyword' && rule.keywordRule) {
+                    const keywords = rule.keywordRule.keywords || [];
+                    const excludeWords = rule.keywordRule.excludeWords || [];
+                    const serviceIds = rule.keywordRule.serviceIds || [];
+                    
+                    ruleDetails = `
+                        <div class="mt-2">
+                            ${keywords.length > 0 ? `<div><strong>キーワード:</strong> ${keywords.map(k => `<span class="keyword-tag">${k}</span>`).join('')}</div>` : ''}
+                            ${excludeWords.length > 0 ? `<div><strong>除外ワード:</strong> ${excludeWords.map(w => `<span class="exclude-tag">${w}</span>`).join('')}</div>` : ''}
+                            ${serviceIds.length > 0 ? `<div><strong>対象チャンネル:</strong> ${serviceIds.map(s => `<span class="service-tag">${s}</span>`).join('')}</div>` : ''}
+                        </div>
+                    `;
+                } else if (rule.type === 'series' && rule.seriesRule) {
+                    ruleDetails = `
+                        <div class="mt-2">
+                            <div><strong>シリーズID:</strong> ${rule.seriesRule.seriesId}</div>
+                            ${rule.seriesRule.programName ? `<div><strong>番組名:</strong> ${rule.seriesRule.programName}</div>` : ''}
+                            ${rule.seriesRule.serviceId ? `<div><strong>対象チャンネル:</strong> <span class="service-tag">${rule.seriesRule.serviceId}</span></div>` : ''}
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div class="card ${cardClass}">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h5 class="card-title">
+                                        ${rule.name}
+                                        <span class="badge ${rule.enabled ? 'bg-success' : 'bg-secondary'} ms-2">
+                                            ${rule.enabled ? '有効' : '無効'}
+                                        </span>
+                                        <span class="badge bg-info ms-1">${rule.type === 'keyword' ? 'キーワード' : 'シリーズ'}</span>
+                                        <span class="badge bg-warning text-dark ms-1">優先度: ${rule.priority}</span>
+                                    </h5>
+                                    ${ruleDetails}
+                                    <div class="mt-2 text-muted small">
+                                        作成: ${new Date(rule.createdAt).toLocaleString('ja-JP')}
+                                        ${rule.updatedAt !== rule.createdAt ? `| 更新: ${new Date(rule.updatedAt).toLocaleString('ja-JP')}` : ''}
+                                    </div>
+                                </div>
+                                <div class="btn-group">
+                                    <button class="btn btn-outline-primary btn-sm" onclick="editRule('${rule.id}')">編集</button>
+                                    <button class="btn btn-outline-danger btn-sm" onclick="deleteRule('${rule.id}', '${rule.name}')">削除</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = rulesHtml;
+        }
+
+        // ログ一覧の読み込み
+        async function loadLogs() {
+            try {
+                const response = await fetch('/auto-reservations/logs');
+                if (response.ok) {
+                    logs = await response.json() || [];
+                    renderLogs();
+                } else {
+                    showError('ログの読み込みに失敗しました');
+                }
+            } catch (error) {
+                showError('ネットワークエラー: ' + error.message);
+            }
+        }
+
+        // ログ一覧の表示
+        function renderLogs() {
+            const container = document.getElementById('logsContainer');
+            
+            if (logs.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-5">
+                        <h5>実行ログがありません</h5>
+                        <p class="text-muted">自動予約エンジンが動作すると、ここにログが表示されます。</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const logsHtml = logs.map(log => {
+                const statusClass = log.status === 'reserved' ? 'bg-success' : 
+                                  log.status === 'failed' ? 'bg-danger' : 
+                                  log.status === 'matched' ? 'bg-info' : 'bg-secondary';
+                
+                const ruleName = rules.find(r => r.id === log.ruleId)?.name || 'Unknown Rule';
+                
+                return `
+                    <div class="card mb-2">
+                        <div class="card-body py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="badge ${statusClass}">${log.status}</span>
+                                    <strong>${ruleName}</strong>
+                                    <span class="text-muted">- プログラムID: ${log.programId}</span>
+                                    ${log.reservationId ? `<span class="text-muted">- 予約ID: ${log.reservationId}</span>` : ''}
+                                </div>
+                                <small class="text-muted">${new Date(log.createdAt).toLocaleString('ja-JP')}</small>
+                            </div>
+                            ${log.reason ? `<div class="text-muted small mt-1">${log.reason}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = logsHtml;
+        }
+
+        // ルール作成モーダルを開く
+        function openCreateRuleModal() {
+            editingRuleId = null;
+            document.getElementById('ruleModalTitle').textContent = '新しいルールを作成';
+            document.getElementById('ruleForm').reset();
+            document.getElementById('ruleId').value = '';
+            document.getElementById('ruleEnabled').checked = true;
+            document.getElementById('rulePriority').value = 10;
+            document.getElementById('recorderUrl').value = 'http://localhost:37569';
+            toggleRuleTypeFields();
+        }
+
+        // ルール編集モーダルを開く
+        function editRule(ruleId) {
+            const rule = rules.find(r => r.id === ruleId);
+            if (!rule) return;
+
+            editingRuleId = ruleId;
+            document.getElementById('ruleModalTitle').textContent = 'ルールを編集';
+            
+            // 基本情報
+            document.getElementById('ruleId').value = rule.id;
+            document.getElementById('ruleName').value = rule.name;
+            document.getElementById('ruleType').value = rule.type;
+            document.getElementById('rulePriority').value = rule.priority;
+            document.getElementById('recorderUrl').value = rule.recorderUrl;
+            document.getElementById('ruleEnabled').checked = rule.enabled;
+
+            // ルールタイプ別の詳細情報
+            if (rule.type === 'keyword' && rule.keywordRule) {
+                document.getElementById('keywords').value = (rule.keywordRule.keywords || []).join(',');
+                document.getElementById('excludeWords').value = (rule.keywordRule.excludeWords || []).join(',');
+                document.getElementById('serviceIds').value = (rule.keywordRule.serviceIds || []).join(',');
+                document.getElementById('genres').value = (rule.keywordRule.genres || []).join(',');
+            } else if (rule.type === 'series' && rule.seriesRule) {
+                document.getElementById('seriesId').value = rule.seriesRule.seriesId || '';
+                document.getElementById('programName').value = rule.seriesRule.programName || '';
+                document.getElementById('seriesServiceId').value = rule.seriesRule.serviceId || '';
+            }
+
+            toggleRuleTypeFields();
+            new bootstrap.Modal(document.getElementById('ruleModal')).show();
+        }
+
+        // ルールタイプ切り替え
+        function toggleRuleTypeFields() {
+            const ruleType = document.getElementById('ruleType').value;
+            const keywordFields = document.getElementById('keywordRuleFields');
+            const seriesFields = document.getElementById('seriesRuleFields');
+
+            if (ruleType === 'keyword') {
+                keywordFields.style.display = 'block';
+                seriesFields.style.display = 'none';
+            } else {
+                keywordFields.style.display = 'none';
+                seriesFields.style.display = 'block';
+            }
+        }
+
+        // ルール保存
+        async function saveRule() {
+            const form = document.getElementById('ruleForm');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+
+            const ruleType = document.getElementById('ruleType').value;
+            const ruleData = {
+                type: ruleType,
+                name: document.getElementById('ruleName').value,
+                enabled: document.getElementById('ruleEnabled').checked,
+                priority: parseInt(document.getElementById('rulePriority').value),
+                recorderUrl: document.getElementById('recorderUrl').value
+            };
+
+            if (ruleType === 'keyword') {
+                const keywords = document.getElementById('keywords').value.split(',').map(k => k.trim()).filter(k => k);
+                const excludeWords = document.getElementById('excludeWords').value.split(',').map(w => w.trim()).filter(w => w);
+                const serviceIds = document.getElementById('serviceIds').value.split(',').map(s => s.trim()).filter(s => s).map(s => parseInt(s));
+                const genres = document.getElementById('genres').value.split(',').map(g => g.trim()).filter(g => g).map(g => parseInt(g));
+
+                if (keywords.length === 0) {
+                    showError('キーワードを少なくとも1つ入力してください');
+                    return;
+                }
+
+                ruleData.keywordRule = {
+                    keywords: keywords,
+                    excludeWords: excludeWords.length > 0 ? excludeWords : undefined,
+                    serviceIds: serviceIds.length > 0 ? serviceIds : undefined,
+                    genres: genres.length > 0 ? genres : undefined
+                };
+            } else {
+                const seriesId = document.getElementById('seriesId').value.trim();
+                if (!seriesId) {
+                    showError('シリーズIDを入力してください');
+                    return;
+                }
+
+                ruleData.seriesRule = {
+                    seriesId: seriesId,
+                    programName: document.getElementById('programName').value.trim() || undefined,
+                    serviceId: document.getElementById('seriesServiceId').value ? parseInt(document.getElementById('seriesServiceId').value) : undefined
+                };
+            }
+
+            try {
+                let response;
+                if (editingRuleId) {
+                    // 更新
+                    response = await fetch(`/auto-reservations/rules/${editingRuleId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(ruleData)
+                    });
+                } else {
+                    // 作成
+                    response = await fetch('/auto-reservations/rules', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(ruleData)
+                    });
+                }
+
+                if (response.ok) {
+                    bootstrap.Modal.getInstance(document.getElementById('ruleModal')).hide();
+                    loadRules();
+                    showSuccess(editingRuleId ? 'ルールを更新しました' : 'ルールを作成しました');
+                } else {
+                    const errorText = await response.text();
+                    showError('保存に失敗しました: ' + errorText);
+                }
+            } catch (error) {
+                showError('ネットワークエラー: ' + error.message);
+            }
+        }
+
+        // ルール削除
+        async function deleteRule(ruleId, ruleName) {
+            if (!confirm(`ルール「${ruleName}」を削除しますか？`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/auto-reservations/rules/${ruleId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadRules();
+                    showSuccess('ルールを削除しました');
+                } else {
+                    showError('削除に失敗しました');
+                }
+            } catch (error) {
+                showError('ネットワークエラー: ' + error.message);
+            }
+        }
+
+        // 成功メッセージ表示
+        function showSuccess(message) {
+            showAlert(message, 'success');
+        }
+
+        // エラーメッセージ表示
+        function showError(message) {
+            showAlert(message, 'danger');
+        }
+
+        // アラート表示
+        function showAlert(message, type) {
+            const alertHtml = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            // 既存のアラートを削除
+            const existingAlerts = document.querySelectorAll('.alert');
+            existingAlerts.forEach(alert => alert.remove());
+            
+            // 新しいアラートを挿入
+            const container = document.querySelector('.container-fluid');
+            container.insertAdjacentHTML('afterbegin', alertHtml);
+            
+            // 5秒後に自動削除
+            setTimeout(() => {
+                const alert = document.querySelector('.alert');
+                if (alert) {
+                    bootstrap.Alert.getOrCreateInstance(alert).close();
+                }
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

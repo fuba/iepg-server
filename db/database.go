@@ -27,6 +27,14 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 		return nil, err
 	}
 
+	// Enable foreign key constraints
+	_, err = db.Exec("PRAGMA foreign_keys = ON")
+	if err != nil {
+		models.Log.Error("InitDB: Failed to enable foreign keys: %v", err)
+		db.Close()
+		return nil, err
+	}
+
 	models.Log.Debug("InitDB: Creating tables")
 	// programsテーブルの作成
 	_, err = db.Exec(`
@@ -38,7 +46,14 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 			name          TEXT,
 			description   TEXT,
 			nameForSearch TEXT,
-			descForSearch TEXT
+			descForSearch TEXT,
+			seriesId      INTEGER,
+			seriesEpisode INTEGER,
+			seriesLastEpisode INTEGER,
+			seriesName    TEXT,
+			seriesRepeat  INTEGER,
+			seriesPattern INTEGER,
+			seriesExpiresAt INTEGER
 		);
 	`)
 	if err != nil {
@@ -84,6 +99,77 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 		return nil, err
 	}
 
+	// 自動予約ルールテーブルの作成
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS auto_reservation_rules (
+			id          TEXT PRIMARY KEY,
+			type        TEXT NOT NULL,
+			name        TEXT NOT NULL,
+			enabled     INTEGER NOT NULL DEFAULT 1,
+			priority    INTEGER NOT NULL DEFAULT 0,
+			recorderUrl TEXT NOT NULL,
+			createdAt   INTEGER NOT NULL,
+			updatedAt   INTEGER NOT NULL
+		);
+	`)
+	if err != nil {
+		models.Log.Error("InitDB: Failed to create auto_reservation_rules table: %v", err)
+		db.Close()
+		return nil, err
+	}
+
+	// キーワードルールテーブルの作成
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS keyword_rules (
+			ruleId       TEXT NOT NULL,
+			keywords     TEXT NOT NULL,
+			genres       TEXT,
+			serviceIds   TEXT,
+			excludeWords TEXT,
+			FOREIGN KEY (ruleId) REFERENCES auto_reservation_rules(id) ON DELETE CASCADE
+		);
+	`)
+	if err != nil {
+		models.Log.Error("InitDB: Failed to create keyword_rules table: %v", err)
+		db.Close()
+		return nil, err
+	}
+
+	// シリーズルールテーブルの作成
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS series_rules (
+			ruleId      TEXT NOT NULL,
+			seriesId    TEXT NOT NULL,
+			programName TEXT,
+			serviceId   INTEGER,
+			FOREIGN KEY (ruleId) REFERENCES auto_reservation_rules(id) ON DELETE CASCADE
+		);
+	`)
+	if err != nil {
+		models.Log.Error("InitDB: Failed to create series_rules table: %v", err)
+		db.Close()
+		return nil, err
+	}
+
+	// 自動予約ログテーブルの作成
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS auto_reservation_logs (
+			id            TEXT PRIMARY KEY,
+			ruleId        TEXT NOT NULL,
+			programId     INTEGER NOT NULL,
+			reservationId TEXT,
+			status        TEXT NOT NULL,
+			reason        TEXT,
+			createdAt     INTEGER NOT NULL,
+			FOREIGN KEY (ruleId) REFERENCES auto_reservation_rules(id) ON DELETE CASCADE
+		);
+	`)
+	if err != nil {
+		models.Log.Error("InitDB: Failed to create auto_reservation_logs table: %v", err)
+		db.Close()
+		return nil, err
+	}
+
 	// インデックスの作成
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_reservations_programId ON reservations(programId);`)
 	if err != nil {
@@ -93,6 +179,16 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_reservations_status ON reservations(status);`)
 	if err != nil {
 		models.Log.Error("InitDB: Failed to create index on status: %v", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_programs_seriesId ON programs(seriesId);`)
+	if err != nil {
+		models.Log.Error("InitDB: Failed to create index on seriesId: %v", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_auto_reservation_logs_ruleId ON auto_reservation_logs(ruleId);`)
+	if err != nil {
+		models.Log.Error("InitDB: Failed to create index on auto_reservation_logs.ruleId: %v", err)
 	}
 
 	models.Log.Debug("InitDB: Database initialization completed successfully")
@@ -219,11 +315,27 @@ func StartStreamFetcher(ctx context.Context, db *sql.DB, apiURL string) {
 						p.DescForSearch = models.NormalizeForSearch(p.Description)
 						
 						// programs テーブルへ INSERT OR REPLACE
+						var seriesId, seriesEpisode, seriesLastEpisode, seriesRepeat, seriesPattern interface{}
+						var seriesName interface{}
+						var seriesExpiresAt interface{}
+						
+						if p.Series != nil {
+							seriesId = p.Series.ID
+							seriesEpisode = p.Series.Episode
+							seriesLastEpisode = p.Series.LastEpisode
+							seriesName = p.Series.Name
+							seriesRepeat = p.Series.Repeat
+							seriesPattern = p.Series.Pattern
+							seriesExpiresAt = p.Series.ExpiresAt
+						}
+						
 						_, err = db.Exec(`
 							INSERT OR REPLACE INTO programs
-								(id, serviceId, startAt, duration, name, description, nameForSearch, descForSearch)
-							VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-						`, p.ID, p.ServiceID, p.StartAt, p.Duration, p.Name, p.Description, p.NameForSearch, p.DescForSearch)
+								(id, serviceId, startAt, duration, name, description, nameForSearch, descForSearch,
+								 seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt)
+							VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+						`, p.ID, p.ServiceID, p.StartAt, p.Duration, p.Name, p.Description, p.NameForSearch, p.DescForSearch,
+						   seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt)
 
 						if err != nil {
 							models.Log.Error("StreamFetcher: DB insert error: %v", err)
@@ -419,7 +531,8 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64, c
 
 		// クエリの基本部分を構築
 		query = `
-			SELECT id, serviceId, startAt, duration, name, description
+			SELECT id, serviceId, startAt, duration, name, description,
+				   seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt
 			FROM programs
 			WHERE 1=1
 		`
@@ -474,7 +587,9 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64, c
 		models.Log.Debug("SearchPrograms: Added negative search conditions: %v", negativeTerms)
 		models.Log.Debug("SearchPrograms: Query after all search conditions: %s", query)
 	} else {
-		query = "SELECT id, serviceId, startAt, duration, name, description FROM programs"
+		query = `SELECT id, serviceId, startAt, duration, name, description,
+				 seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt
+				 FROM programs`
 		models.Log.Debug("SearchPrograms: Using regular query without search terms")
 	}
 
@@ -588,10 +703,29 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64, c
 
 	for rows.Next() {
 		var p models.Program
-		if err := rows.Scan(&p.ID, &p.ServiceID, &p.StartAt, &p.Duration, &p.Name, &p.Description); err != nil {
+		var seriesId, seriesEpisode, seriesLastEpisode, seriesRepeat, seriesPattern sql.NullInt64
+		var seriesName sql.NullString
+		var seriesExpiresAt sql.NullInt64
+		
+		if err := rows.Scan(&p.ID, &p.ServiceID, &p.StartAt, &p.Duration, &p.Name, &p.Description,
+			&seriesId, &seriesEpisode, &seriesLastEpisode, &seriesName, &seriesRepeat, &seriesPattern, &seriesExpiresAt); err != nil {
 			models.Log.Error("SearchPrograms: Scan error: %v", err)
 			return nil, err
 		}
+		
+		// Build series information if available
+		if seriesId.Valid {
+			p.Series = &models.Series{
+				ID:          int(seriesId.Int64),
+				Episode:     int(seriesEpisode.Int64),
+				LastEpisode: int(seriesLastEpisode.Int64),
+				Name:        seriesName.String,
+				Repeat:      int(seriesRepeat.Int64),
+				Pattern:     int(seriesPattern.Int64),
+				ExpiresAt:   seriesExpiresAt.Int64,
+			}
+		}
+		
 		programs = append(programs, p)
 		count++
 
@@ -607,8 +741,15 @@ func GetProgramByID(db *sql.DB, id int64) (*models.Program, error) {
 	models.Log.Debug("GetProgramByID: Looking up program with ID: %d", id)
 
 	var p models.Program
-	err := db.QueryRow("SELECT id, serviceId, startAt, duration, name, description FROM programs WHERE id = ?", id).
-		Scan(&p.ID, &p.ServiceID, &p.StartAt, &p.Duration, &p.Name, &p.Description)
+	var seriesId, seriesEpisode, seriesLastEpisode, seriesRepeat, seriesPattern sql.NullInt64
+	var seriesName sql.NullString
+	var seriesExpiresAt sql.NullInt64
+	
+	err := db.QueryRow(`SELECT id, serviceId, startAt, duration, name, description,
+						seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt 
+						FROM programs WHERE id = ?`, id).
+		Scan(&p.ID, &p.ServiceID, &p.StartAt, &p.Duration, &p.Name, &p.Description,
+			 &seriesId, &seriesEpisode, &seriesLastEpisode, &seriesName, &seriesRepeat, &seriesPattern, &seriesExpiresAt)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -617,6 +758,19 @@ func GetProgramByID(db *sql.DB, id int64) (*models.Program, error) {
 			models.Log.Error("GetProgramByID: Query error: %v", err)
 		}
 		return nil, err
+	}
+
+	// Build series information if available
+	if seriesId.Valid {
+		p.Series = &models.Series{
+			ID:          int(seriesId.Int64),
+			Episode:     int(seriesEpisode.Int64),
+			LastEpisode: int(seriesLastEpisode.Int64),
+			Name:        seriesName.String,
+			Repeat:      int(seriesRepeat.Int64),
+			Pattern:     int(seriesPattern.Int64),
+			ExpiresAt:   seriesExpiresAt.Int64,
+		}
 	}
 
 	models.Log.Debug("GetProgramByID: Found program: ID=%d, Name=%s, StartAt=%d",
@@ -875,8 +1029,9 @@ func InitProgramsFromAPI(ctx context.Context, db *sql.DB, mirakurunBaseURL strin
 
 	// バッチインサートのためのステートメント準備
 	stmtPrograms, err := tx.Prepare(`
-		INSERT INTO programs (id, serviceId, startAt, duration, name, description, nameForSearch, descForSearch)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+		INSERT INTO programs (id, serviceId, startAt, duration, name, description, nameForSearch, descForSearch,
+							  seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 	`)
 	if err != nil {
 		tx.Rollback()
@@ -891,7 +1046,23 @@ func InitProgramsFromAPI(ctx context.Context, db *sql.DB, mirakurunBaseURL strin
 		p.NameForSearch = models.NormalizeForSearch(p.Name)
 		p.DescForSearch = models.NormalizeForSearch(p.Description)
 		
-		_, err = stmtPrograms.Exec(p.ID, p.ServiceID, p.StartAt, p.Duration, p.Name, p.Description, p.NameForSearch, p.DescForSearch)
+		// Series information
+		var seriesId, seriesEpisode, seriesLastEpisode, seriesRepeat, seriesPattern interface{}
+		var seriesName interface{}
+		var seriesExpiresAt interface{}
+		
+		if p.Series != nil {
+			seriesId = p.Series.ID
+			seriesEpisode = p.Series.Episode
+			seriesLastEpisode = p.Series.LastEpisode
+			seriesName = p.Series.Name
+			seriesRepeat = p.Series.Repeat
+			seriesPattern = p.Series.Pattern
+			seriesExpiresAt = p.Series.ExpiresAt
+		}
+		
+		_, err = stmtPrograms.Exec(p.ID, p.ServiceID, p.StartAt, p.Duration, p.Name, p.Description, p.NameForSearch, p.DescForSearch,
+								  seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt)
 		if err != nil {
 			tx.Rollback()
 			models.Log.Error("InitProgramsFromAPI: Failed to insert program %d: %v", p.ID, err)

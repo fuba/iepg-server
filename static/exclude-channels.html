@@ -15,10 +15,20 @@
 </head>
 <body class="bg-gray-50">
     <div class="container mx-auto px-4 py-8 max-w-5xl">
-        <header class="mb-6">
-            <h1 class="text-2xl font-bold text-gray-800">チャンネル除外設定</h1>
-            <p class="text-gray-600 mt-2">検索結果に表示したくないチャンネルを除外できます</p>
-        </header>
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">チャンネル除外設定</h1>
+                <p class="text-gray-600 mt-2">検索結果に表示したくないチャンネルを除外できます</p>
+            </div>
+            <div class="flex space-x-2">
+                <a href="/ui/search" class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none">
+                    番組検索
+                </a>
+                <a href="/ui/auto-reservation" class="px-4 py-2 bg-blue-500 text-white font-medium rounded-md hover:bg-blue-600 focus:outline-none">
+                    自動予約管理
+                </a>
+            </div>
+        </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <!-- 左側: 利用可能なチャンネル一覧 -->

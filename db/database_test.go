@@ -1,7 +1,6 @@
 package db
 
 import (
-	"database/sql"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -14,29 +13,12 @@ func init() {
 }
 
 func TestSearchPrograms(t *testing.T) {
-	// テスト用のインメモリデータベースを初期化
-	db, err := sql.Open("sqlite3", ":memory:")
+	// テスト用のデータベースを初期化（InitDBを使用して完全なスキーマを作成）
+	db, err := InitDB(":memory:")
 	if err != nil {
-		t.Fatalf("Failed to open test database: %v", err)
+		t.Fatalf("Failed to initialize test database: %v", err)
 	}
 	defer db.Close()
-
-	// programsテーブルの作成
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS programs (
-			id            INTEGER PRIMARY KEY,
-			serviceId     INTEGER,
-			startAt       INTEGER,
-			duration      INTEGER,
-			name          TEXT,
-			description   TEXT,
-			nameForSearch TEXT,
-			descForSearch TEXT
-		);
-	`)
-	if err != nil {
-		t.Fatalf("Failed to create test table: %v", err)
-	}
 
 	// テストデータの挿入
 	testPrograms := []struct {
@@ -64,9 +46,11 @@ func TestSearchPrograms(t *testing.T) {
 		nameForSearch := models.NormalizeForSearch(p.name)
 		descForSearch := models.NormalizeForSearch(p.description)
 		_, err = db.Exec(
-			`INSERT INTO programs (id, serviceId, startAt, duration, name, description, nameForSearch, descForSearch)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO programs (id, serviceId, startAt, duration, name, description, nameForSearch, descForSearch,
+			                       seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			p.id, p.serviceId, p.startAt, p.duration, p.name, p.description, nameForSearch, descForSearch,
+			nil, nil, nil, nil, nil, nil, nil,
 		)
 		if err != nil {
 			t.Fatalf("Failed to insert test data: %v", err)

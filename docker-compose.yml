@@ -10,7 +10,16 @@ services:
       - ./data:/app/data
     environment:
       - PORT=40870
-      - LOG_LEVEL=debug
+      - LOG_LEVEL=info
       - DB_PATH=/app/data/programs.db
       - MIRAKURUN_URL=http://localhost:40772/api
-      - RECREATE_DB=true  # 起動のたびにデータベースを再作成
+      - RECORDER_URL=http://localhost:37569
+      - ENABLE_AUTO_RESERVATION=true
+      - ENABLE_CLEANUP=true
+      - SKIP_INITIAL_LOAD=false
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:40870/services", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

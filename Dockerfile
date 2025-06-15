@@ -19,7 +19,7 @@ FROM alpine:latest
 WORKDIR /app
 
 # 必要なランタイム依存をインストール
-RUN apk add --no-cache ca-certificates tzdata sqlite
+RUN apk add --no-cache ca-certificates tzdata sqlite wget
 
 # タイムゾーンを設定
 ENV TZ=Asia/Tokyo
@@ -35,6 +35,10 @@ RUN mkdir -p /app/data
 
 # ポート公開
 EXPOSE 40870
+
+# ヘルスチェック
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost:40870/services || exit 1
 
 # 実行
 CMD ["./iepg-server"]
