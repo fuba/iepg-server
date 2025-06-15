@@ -11,6 +11,11 @@ import (
 	"github.com/fuba/iepg-server/models"
 )
 
+func init() {
+	// テスト用にロガーを初期化
+	models.InitLogger("debug")
+}
+
 func setupAutoReservationTestDB(t *testing.T) *sql.DB {
 	dbPath := "/tmp/test_auto_reservation_" + t.Name() + ".db"
 	db, err := InitDB(dbPath)

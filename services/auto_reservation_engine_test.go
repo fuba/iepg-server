@@ -11,6 +11,11 @@ import (
 	"github.com/fuba/iepg-server/models"
 )
 
+func init() {
+	// テスト用にロガーを初期化
+	models.InitLogger("debug")
+}
+
 func setupEngineTestDB(t *testing.T) *sql.DB {
 	database, err := db.InitDB(":memory:")
 	if err != nil {
