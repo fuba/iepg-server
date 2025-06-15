@@ -172,11 +172,27 @@
         // すべてのデータを読み込む
         async function loadAllData() {
             try {
+                // 現在のフィルタ状態を保存
+                const activeFilter = document.querySelector('.filter-btn.bg-indigo-600')?.dataset.type || 'all';
+                const searchTerm = document.getElementById('channelSearch')?.value || '';
+                
                 await Promise.all([
                     loadChannelList(),
                     loadExcludedList()
                 ]);
                 console.log("すべてのデータを読み込みました");
+                
+                // フィルタ状態を復元
+                if (activeFilter !== 'all') {
+                    const filterBtn = document.querySelector(`.filter-btn[data-type="${activeFilter}"]`);
+                    if (filterBtn) {
+                        filterBtn.click();
+                    }
+                }
+                if (searchTerm) {
+                    document.getElementById('channelSearch').value = searchTerm;
+                    filterChannelsByName(searchTerm);
+                }
             } catch (error) {
                 console.error("データの読み込みに失敗しました:", error);
             }

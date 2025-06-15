@@ -262,6 +262,9 @@
                 // サービスセレクトボックスの構築
                 const selectEl = document.getElementById('serviceId');
                 
+                // 現在選択されているサービスIDを保存
+                const currentServiceId = selectEl.value;
+                
                 // サービスを種類ごとにグループ化
                 const serviceGroups = {
                     1: [], // 地上波
@@ -319,6 +322,11 @@
                 
                 console.log(`${services.length}件のサービスを読み込みました`);
                 
+                // 以前選択されていたサービスIDを復元
+                if (currentServiceId && selectEl.querySelector(`option[value="${currentServiceId}"]`)) {
+                    selectEl.value = currentServiceId;
+                }
+                
                 // 放送種別ラジオボタンの変更イベントを設定
                 setupChannelFilterEvents();
                 
@@ -343,6 +351,7 @@
         function filterChannelOptions() {
             const selectedFilter = document.querySelector('input[name="channelFilter"]:checked').value;
             const selectEl = document.getElementById('serviceId');
+            const currentServiceId = selectEl.value; // 現在の選択値を保存
             
             // 「すべて」の場合は全オプショングループを表示
             if (selectedFilter === 'all') {
@@ -350,6 +359,10 @@
                     if (selectEl.children[i].tagName === 'OPTGROUP') {
                         selectEl.children[i].style.display = '';
                     }
+                }
+                // 選択値を復元
+                if (currentServiceId && selectEl.querySelector(`option[value="${currentServiceId}"]`)) {
+                    selectEl.value = currentServiceId;
                 }
                 return;
             }
@@ -376,7 +389,10 @@
                 return optGroup.style.display !== 'none';
             });
             
-            if (visibleOptions.length > 0 && !visibleOptions.includes(selectEl.options[selectEl.selectedIndex])) {
+            // 選択値を復元（可能な場合）
+            if (currentServiceId && visibleOptions.find(opt => opt.value === currentServiceId)) {
+                selectEl.value = currentServiceId;
+            } else if (visibleOptions.length > 0 && !visibleOptions.includes(selectEl.options[selectEl.selectedIndex])) {
                 selectEl.value = visibleOptions[0].value;
             }
         }
