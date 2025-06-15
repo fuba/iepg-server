@@ -14,6 +14,9 @@ IEPGフォーマットでテレビ番組情報を提供するサーバーです�
 - Webベースの検索UI
 - 放送種別（地上波/BS/CS）によるフィルタリング機能
 - 検索結果から除外したいチャンネルを設定する機能
+- **録画予約機能** - 番組の録画予約とステータス管理
+- **自動予約機能** - キーワードやシリーズIDによる自動録画予約
+- **Web管理UI** - 自動予約ルール管理とチャンネル除外設定のWebインターフェース
 
 ## インストール方法
 
@@ -46,6 +49,10 @@ mkdir -p data
 - `LOG_LEVEL`: ログレベル（debug/info/warn/error）
 - `DB_PATH`: データベースファイルのパス
 - `MIRAKURUN_URL`: MirakurunのAPI URL
+- `RECORDER_URL`: 録画サーバーのURL（デフォルト: http://localhost:37569）
+- `ENABLE_AUTO_RESERVATION`: 自動予約機能の有効/無効（デフォルト: true）
+- `ENABLE_CLEANUP`: 古い番組データのクリーンアップ機能（デフォルト: true）
+- `SKIP_INITIAL_LOAD`: 起動時の初期データロードをスキップ（デフォルト: false）
 
 4. ビルドと起動
 
@@ -55,7 +62,11 @@ docker compose up -d
 
 5. 動作確認
 
-ブラウザで `http://localhost:40870/ui/search` にアクセスして検索UIが表示されることを確認します。
+ブラウザで以下のURLにアクセスして各機能が利用できることを確認します：
+
+- 番組検索: `http://localhost:40870/ui/search`
+- チャンネル除外設定: `http://localhost:40870/ui/exclude-channels`
+- 自動予約管理: `http://localhost:40870/ui/auto-reservation`
 
 ## バージョンアップ方法
 
@@ -92,11 +103,32 @@ docker compose logs -f
 
 ```bash
 # Go標準テストの実行
+go test -v ./...
+
+# 特定パッケージのテスト
 go test -v ./db
+go test -v ./handlers
+go test -v ./services
 
 # Dockerを使用したテスト
 docker build -t iepg-server-test -f Dockerfile.test .
 docker run --rm iepg-server-test
+```
+
+### ローカル開発
+
+ローカルでの開発時は以下のコマンドでサーバーを起動できます：
+
+```bash
+# 環境変数の設定（例）
+export PORT=40870
+export LOG_LEVEL=debug
+export DB_PATH=./data/programs.db
+export MIRAKURUN_URL=http://localhost:40772/api
+export RECORDER_URL=http://localhost:37569
+
+# サーバー起動
+go run main.go
 ```
 
 ### CI/CD
@@ -202,6 +234,92 @@ program-id: 1234
 
 これは番組の説明です。
 ```
+
+### 録画予約 API
+
+#### 予約作成
+**エンドポイント**: `/reservations`  
+**メソッド**: POST  
+**説明**: 指定された番組の録画予約を作成します。
+
+**リクエストボディ**:
+```json
+{
+  "programId": 1234,
+  "recorderUrl": "http://localhost:37569" // オプション
+}
+```
+
+#### 予約一覧取得
+**エンドポイント**: `/reservations`  
+**メソッド**: GET  
+**説明**: 作成された予約の一覧を取得します。
+
+#### 予約削除
+**エンドポイント**: `/reservations/{id}`  
+**メソッド**: DELETE  
+**説明**: 指定されたIDの予約を削除します。
+
+### 自動予約管理 API
+
+#### 自動予約ルール作成
+**エンドポイント**: `/auto-reservations/rules`  
+**メソッド**: POST  
+**説明**: 新しい自動予約ルールを作成します。
+
+**リクエストボディ**:
+```json
+{
+  "type": "keyword", // "keyword" または "series"
+  "name": "ルール名",
+  "enabled": true,
+  "priority": 10,
+  "recorderUrl": "http://localhost:37569",
+  "keywords": ["キーワード1", "キーワード2"], // type=keywordの場合
+  "excludeWords": ["除外ワード"],
+  "serviceIds": [1024, 1025], // チャンネル指定（オプション）
+  "seriesId": "12345" // type=seriesの場合
+}
+```
+
+#### 自動予約ルール一覧取得
+**エンドポイント**: `/auto-reservations/rules`  
+**メソッド**: GET
+
+#### 自動予約ルール詳細取得
+**エンドポイント**: `/auto-reservations/rules/{id}`  
+**メソッド**: GET
+
+#### 自動予約ルール更新
+**エンドポイント**: `/auto-reservations/rules/{id}`  
+**メソッド**: PUT
+
+#### 自動予約ルール削除
+**エンドポイント**: `/auto-reservations/rules/{id}`  
+**メソッド**: DELETE
+
+#### 自動予約実行ログ取得
+**エンドポイント**: `/auto-reservations/logs`  
+**メソッド**: GET  
+**説明**: 自動予約の実行履歴を取得します。
+
+**クエリパラメータ**:
+- `ruleId` (オプション): 特定ルールのログのみ取得
+- `limit` (オプション): 取得件数の上限
+
+### チャンネル除外設定 API
+
+#### 除外チャンネル追加
+**エンドポイント**: `/services/exclude`  
+**メソッド**: POST
+
+#### 除外チャンネル削除
+**エンドポイント**: `/services/unexclude`  
+**メソッド**: POST
+
+#### 除外チャンネル一覧取得
+**エンドポイント**: `/services/excluded`  
+**メソッド**: GET
 
 ## ライセンス
 
