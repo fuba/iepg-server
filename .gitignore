@@ -1,9 +1,11 @@
 # データベースファイル
 data/*.db
 data/programs.db
+**/*.db
 
 # バイナリファイル
 iepg-server
+iepg-server-new
 __debug_bin
 
 # 一時ファイル
