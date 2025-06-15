@@ -257,23 +257,17 @@ func HandleGetAllServices(w http.ResponseWriter, r *http.Request, dbConn *sql.DB
 	// すべてのサービスを取得（タイプ192を除く、除外チャンネルは含む）
 	services := db.GetFilteredServices(nil, nil, excludedTypes)
 	
+	// 除外されているサービスを取得
+	excludedServices, err := db.GetExcludedServices(dbConn)
+	if err != nil {
+		models.Log.Error("HandleGetAllServices: Failed to get excluded services: %v", err)
+		excludedServices = []models.ExcludedService{} // エラーの場合は空のスライスを使用
+	}
+	
 	// 除外されているサービスIDのマップを作成
 	excludedIds := make(map[int64]bool)
-	if dbConn != nil {
-		rows, err := dbConn.Query("SELECT serviceId FROM excluded_services")
-		if err != nil {
-			models.Log.Error("HandleGetAllServices: Failed to query excluded services: %v", err)
-		} else {
-			defer rows.Close()
-			for rows.Next() {
-				var serviceId int64
-				if err := rows.Scan(&serviceId); err != nil {
-					models.Log.Error("HandleGetAllServices: Failed to scan excluded service: %v", err)
-					continue
-				}
-				excludedIds[serviceId] = true
-			}
-		}
+	for _, excludedSvc := range excludedServices {
+		excludedIds[excludedSvc.ServiceID] = true
 	}
 	models.Log.Debug("HandleGetAllServices: Loaded %d excluded services", len(excludedIds))
 	
@@ -281,10 +275,14 @@ func HandleGetAllServices(w http.ResponseWriter, r *http.Request, dbConn *sql.DB
 	for i, service := range services {
 		if excludedIds[service.ServiceID] {
 			service.IsExcluded = true
-			services[i] = service // ポインタでなくコピーなのでインデックスで更新
 			models.Log.Debug("HandleGetAllServices: Marked service as excluded: %d (%s)", 
 				service.ServiceID, service.Name)
+		} else {
+			service.IsExcluded = false
+			models.Log.Debug("HandleGetAllServices: Marked service as not excluded: %d (%s)", 
+				service.ServiceID, service.Name)
 		}
+		services[i] = service // ポインタでなくコピーなのでインデックスで更新
 	}
 	
 	// サービスをサービスID順でソート
