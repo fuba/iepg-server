@@ -46,9 +46,14 @@
     <div class="container mx-auto px-4 py-8 max-w-7xl">
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-2xl font-bold text-gray-800">番組検索</h1>
-            <a href="/ui/exclude-channels" class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none">
-                チャンネル除外設定
-            </a>
+            <div class="flex space-x-2">
+                <a href="/ui/exclude-channels" class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none">
+                    チャンネル除外設定
+                </a>
+                <a href="/ui/auto-reservation" class="px-4 py-2 bg-blue-500 text-white font-medium rounded-md hover:bg-blue-600 focus:outline-none">
+                    自動予約管理
+                </a>
+            </div>
         </div>
         
         <div class="bg-white p-6 rounded-lg shadow-md mb-8">
@@ -168,6 +173,77 @@
                         <!-- 結果がここに挿入されます -->
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自動予約作成モーダル -->
+    <div id="autoReservationModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <h3 class="text-lg font-medium text-gray-900 text-center" id="modalTitle">自動予約ルールを作成</h3>
+                <div class="mt-4">
+                    <div class="mb-4 p-3 bg-gray-50 rounded">
+                        <h4 class="text-sm font-medium text-gray-700">番組情報</h4>
+                        <div id="programInfo" class="text-sm text-gray-600 mt-1"></div>
+                    </div>
+                    
+                    <form id="autoReservationForm">
+                        <div class="mb-3">
+                            <label for="ruleName" class="block text-sm font-medium text-gray-700">ルール名</label>
+                            <input type="text" id="autoRuleName" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="ruleType" class="block text-sm font-medium text-gray-700">ルールタイプ</label>
+                            <select id="autoRuleType" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" onchange="toggleAutoRuleFields()">
+                                <option value="keyword">キーワードベース</option>
+                                <option value="series">シリーズベース</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="priority" class="block text-sm font-medium text-gray-700">優先度</label>
+                            <input type="number" id="autoPriority" value="10" min="1" max="100" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        
+                        <!-- キーワードルール設定 -->
+                        <div id="autoKeywordFields">
+                            <div class="mb-3">
+                                <label for="keywords" class="block text-sm font-medium text-gray-700">キーワード</label>
+                                <input type="text" id="autoKeywords" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="カンマ区切りで入力">
+                                <div class="text-xs text-gray-500 mt-1">番組名から自動抽出されます</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="excludeWords" class="block text-sm font-medium text-gray-700">除外ワード</label>
+                                <input type="text" id="autoExcludeWords" value="再放送,総集編" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="カンマ区切りで入力">
+                            </div>
+                        </div>
+                        
+                        <!-- シリーズルール設定 -->
+                        <div id="autoSeriesFields" style="display: none;">
+                            <div class="mb-3">
+                                <label for="seriesId" class="block text-sm font-medium text-gray-700">シリーズID</label>
+                                <input type="text" id="autoSeriesId" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                <div class="text-xs text-gray-500 mt-1">番組にシリーズ情報がある場合は自動入力されます</div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="recorderUrl" class="block text-sm font-medium text-gray-700">録画サーバーURL</label>
+                            <input type="url" id="autoRecorderUrl" value="http://localhost:37569" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" required>
+                        </div>
+                        
+                        <div class="flex items-center justify-between pt-4">
+                            <button type="button" onclick="closeAutoReservationModal()" class="px-4 py-2 bg-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-400 focus:outline-none">
+                                キャンセル
+                            </button>
+                            <button type="button" onclick="createAutoReservation()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none">
+                                作成
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
@@ -482,6 +558,16 @@
                                         data-program-name="${escapeHtml(program.name)}">
                                         予約
                                     </button>
+                                    <button class="ml-1 px-3 py-1 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 focus:outline-none auto-reservation-btn" 
+                                        data-program='${JSON.stringify({
+                                            id: program.id,
+                                            name: program.name,
+                                            description: program.description,
+                                            serviceId: program.serviceId,
+                                            stationName: program.stationName
+                                        })}'>
+                                        自動予約
+                                    </button>
                                 </div>
                             </td>
                         `;
@@ -527,7 +613,7 @@
                 .replace(/'/g, "&#039;");
         }
         
-        // 予約ボタンのクリックイベント処理
+        // ボタンのクリックイベント処理
         document.addEventListener('click', function(e) {
             if (e.target.classList.contains('reservation-btn')) {
                 const programId = e.target.dataset.programId;
@@ -540,6 +626,9 @@
                     // 予約処理
                     makeReservation(programId, programName, recorderUrl);
                 }
+            } else if (e.target.classList.contains('auto-reservation-btn')) {
+                const programData = JSON.parse(e.target.dataset.program);
+                openAutoReservationModal(programData);
             }
         });
         
@@ -569,6 +658,172 @@
                 alert('予約処理中にエラーが発生しました。');
             }
         }
+        
+        // 自動予約モーダルを開く
+        function openAutoReservationModal(programData) {
+            // 番組情報を表示
+            document.getElementById('programInfo').innerHTML = `
+                <div><strong>番組名:</strong> ${escapeHtml(programData.name)}</div>
+                <div><strong>チャンネル:</strong> ${escapeHtml(programData.stationName || 'Unknown')}</div>
+                <div><strong>サービスID:</strong> ${programData.serviceId}</div>
+            `;
+            
+            // フォームの初期化
+            document.getElementById('autoRuleName').value = `${programData.name}の自動予約`;
+            document.getElementById('autoRuleType').value = 'keyword';
+            document.getElementById('autoPriority').value = 10;
+            document.getElementById('autoRecorderUrl').value = 'http://localhost:37569';
+            
+            // 番組名から主要なキーワードを抽出して設定
+            const keywords = extractKeywords(programData.name);
+            document.getElementById('autoKeywords').value = keywords.join(',');
+            
+            // 除外ワードのデフォルト値を設定
+            document.getElementById('autoExcludeWords').value = '再放送,総集編';
+            
+            // シリーズ情報があれば設定（今回は番組データにシリーズ情報がないのでスキップ）
+            document.getElementById('autoSeriesId').value = '';
+            
+            // フィールドの表示切り替え
+            toggleAutoRuleFields();
+            
+            // 番組データを保存（作成時に使用）
+            window.currentProgramData = programData;
+            
+            // モーダルを表示
+            document.getElementById('autoReservationModal').classList.remove('hidden');
+        }
+        
+        // 自動予約モーダルを閉じる
+        function closeAutoReservationModal() {
+            document.getElementById('autoReservationModal').classList.add('hidden');
+            window.currentProgramData = null;
+        }
+        
+        // ルールタイプの表示切り替え
+        function toggleAutoRuleFields() {
+            const ruleType = document.getElementById('autoRuleType').value;
+            const keywordFields = document.getElementById('autoKeywordFields');
+            const seriesFields = document.getElementById('autoSeriesFields');
+            
+            if (ruleType === 'keyword') {
+                keywordFields.style.display = 'block';
+                seriesFields.style.display = 'none';
+            } else {
+                keywordFields.style.display = 'none';
+                seriesFields.style.display = 'block';
+            }
+        }
+        
+        // 番組名からキーワードを抽出する簡易関数
+        function extractKeywords(programName) {
+            if (!programName) return [];
+            
+            // 不要な文字を除去し、主要なキーワードを抽出
+            const cleaned = programName
+                .replace(/[【】\[\]()（）「」『』]/g, ' ') // 括弧を除去
+                .replace(/[#＃]\d+/g, '') // エピソード番号を除去
+                .replace(/第\d+話?/g, '') // 第X話を除去
+                .replace(/\d+時間?/g, '') // 時間表記を除去
+                .replace(/[０-９]/g, '') // 全角数字を除去
+                .replace(/[0-9]/g, '') // 半角数字を除去
+                .replace(/\s+/g, ' ') // 連続空白を1つに
+                .trim();
+            
+            // 主要なキーワードを抽出（長さ2文字以上の単語）
+            const words = cleaned.split(/[\s・]+/).filter(word => word.length >= 2);
+            
+            // 最初の1-3個のキーワードを返す
+            return words.slice(0, 3);
+        }
+        
+        // 自動予約ルールを作成
+        async function createAutoReservation() {
+            const form = document.getElementById('autoReservationForm');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+            
+            const programData = window.currentProgramData;
+            if (!programData) {
+                alert('番組データが見つかりません');
+                return;
+            }
+            
+            const ruleType = document.getElementById('autoRuleType').value;
+            const ruleData = {
+                type: ruleType,
+                name: document.getElementById('autoRuleName').value,
+                enabled: true,
+                priority: parseInt(document.getElementById('autoPriority').value),
+                recorderUrl: document.getElementById('autoRecorderUrl').value
+            };
+            
+            if (ruleType === 'keyword') {
+                const keywords = document.getElementById('autoKeywords').value
+                    .split(',').map(k => k.trim()).filter(k => k);
+                const excludeWords = document.getElementById('autoExcludeWords').value
+                    .split(',').map(w => w.trim()).filter(w => w);
+                
+                if (keywords.length === 0) {
+                    alert('キーワードを少なくとも1つ入力してください');
+                    return;
+                }
+                
+                ruleData.keywordRule = {
+                    keywords: keywords,
+                    serviceIds: [programData.serviceId], // 番組のチャンネルに限定
+                    excludeWords: excludeWords.length > 0 ? excludeWords : undefined
+                };
+            } else {
+                const seriesId = document.getElementById('autoSeriesId').value.trim();
+                if (!seriesId) {
+                    alert('シリーズIDを入力してください');
+                    return;
+                }
+                
+                ruleData.seriesRule = {
+                    seriesId: seriesId,
+                    programName: programData.name,
+                    serviceId: programData.serviceId
+                };
+            }
+            
+            try {
+                const response = await fetch('/auto-reservations/rules', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(ruleData)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(`自動予約ルール「${ruleData.name}」を作成しました`);
+                    closeAutoReservationModal();
+                } else {
+                    const errorText = await response.text();
+                    alert('自動予約ルールの作成に失敗しました: ' + errorText);
+                }
+            } catch (error) {
+                console.error('Auto reservation creation error:', error);
+                alert('自動予約ルールの作成中にエラーが発生しました');
+            }
+        }
+        
+        // ESCキーでモーダルを閉じる
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeAutoReservationModal();
+            }
+        });
+        
+        // モーダル背景クリックで閉じる
+        document.getElementById('autoReservationModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAutoReservationModal();
+            }
+        });
     </script>
 </body>
 </html>

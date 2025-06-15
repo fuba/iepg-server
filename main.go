@@ -198,6 +198,12 @@ func main() {
 		http.ServeFile(w, r, "./static/exclude-channels.html")
 	})
 
+	// 自動予約管理UI
+	router.HandleFunc("/ui/auto-reservation", func(w http.ResponseWriter, r *http.Request) {
+		models.Log.Debug("Serving auto reservation UI")
+		http.ServeFile(w, r, "./static/auto-reservation.html")
+	})
+
 	models.Log.Debug("HTTP endpoints registered")
 
 	port := os.Getenv("PORT")

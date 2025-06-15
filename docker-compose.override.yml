@@ -1,0 +1,15 @@
+# Development override for docker-compose
+# このファイルは開発環境での設定上書き用です
+# 本番環境では使用しないでください
+
+services:
+  iepg-server:
+    environment:
+      - LOG_LEVEL=debug
+      - SKIP_INITIAL_LOAD=true  # 開発環境では初期ロードをスキップ
+    volumes:
+      # 開発時は静的ファイルもマウント
+      - ./static:/app/static
+    # ポートマッピング（network_mode: hostの代わり）
+    # ports:
+    #   - "40870:40870"

@@ -1,0 +1,26 @@
+# Go binary
+iepg-server
+iepg-server-new
+
+# Data directory (will be mounted as volume)
+data/
+
+# Test files
+*_test.go
+
+# Documentation
+docs/
+notes/
+README.md
+LICENSE
+
+# Git
+.git/
+.gitignore
+
+# Docker files in build context (to avoid recursion)
+.dockerignore
+
+# Temporary files
+*.tmp
+*.log
