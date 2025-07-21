@@ -787,7 +787,7 @@
         }
         
         // 自動予約モーダルを開く
-        function openAutoReservationModal(programData) {
+        async function openAutoReservationModal(programData) {
             // 番組情報を表示
             document.getElementById('programInfo').innerHTML = `
                 <div><strong>番組名:</strong> ${escapeHtml(programData.name)}</div>
