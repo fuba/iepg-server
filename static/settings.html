@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>設定 - IEPG Server</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="mb-6">
+            <a href="/ui/search" class="text-blue-600 hover:text-blue-800">&larr; 検索に戻る</a>
+        </div>
+
+        <h1 class="text-3xl font-bold text-gray-900 mb-8">設定</h1>
+
+        <!-- Recording Server Settings -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">録画サーバー設定</h2>
+            <p class="text-gray-600 mb-4">予約時に選択できる録画サーバーを管理します。</p>
+            
+            <div id="recorderServers" class="space-y-4">
+                <!-- Server entries will be dynamically added here -->
+            </div>
+
+            <div class="mt-4 flex space-x-2">
+                <button id="addServerBtn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    サーバーを追加
+                </button>
+                <button id="saveSettingsBtn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                    保存
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading and error messages -->
+        <div id="loading" class="text-center py-4 hidden">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <p class="mt-2 text-gray-600">読み込み中...</p>
+        </div>
+
+        <div id="errorMessage" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 hidden"></div>
+        <div id="successMessage" class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 hidden"></div>
+    </div>
+
+    <script>
+        let servers = [];
+        let nextId = 1;
+
+        // Load settings on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSettings();
+        });
+
+        function showLoading() {
+            document.getElementById('loading').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').classList.add('hidden');
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+            setTimeout(() => errorDiv.classList.add('hidden'), 5000);
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            successDiv.textContent = message;
+            successDiv.classList.remove('hidden');
+            setTimeout(() => successDiv.classList.add('hidden'), 3000);
+        }
+
+        // Load settings from server
+        async function loadSettings() {
+            showLoading();
+            try {
+                const response = await fetch('/api/settings');
+                if (!response.ok) {
+                    throw new Error('設定の読み込みに失敗しました');
+                }
+                const data = await response.json();
+                servers = data.recorderServers || [];
+                if (servers.length === 0) {
+                    // Add default server if none exist
+                    servers = [{name: 'Local Server', url: 'http://localhost:37569'}];
+                }
+                renderServers();
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Render server list
+        function renderServers() {
+            const container = document.getElementById('recorderServers');
+            container.innerHTML = '';
+
+            servers.forEach((server, index) => {
+                const serverDiv = document.createElement('div');
+                serverDiv.className = 'flex items-center space-x-4 p-4 border border-gray-200 rounded-lg';
+                serverDiv.innerHTML = `
+                    <div class="flex-1">
+                        <input type="text" placeholder="サーバー名" value="${escapeHtml(server.name)}" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               onchange="updateServer(${index}, 'name', this.value)">
+                    </div>
+                    <div class="flex-1">
+                        <input type="url" placeholder="http://localhost:37569" value="${escapeHtml(server.url)}" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               onchange="updateServer(${index}, 'url', this.value)">
+                    </div>
+                    <button onclick="removeServer(${index})" 
+                            class="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                        削除
+                    </button>
+                `;
+                container.appendChild(serverDiv);
+            });
+        }
+
+        // Update server data
+        function updateServer(index, field, value) {
+            if (servers[index]) {
+                servers[index][field] = value;
+            }
+        }
+
+        // Remove server
+        function removeServer(index) {
+            if (servers.length <= 1) {
+                showError('最低1つのサーバーが必要です');
+                return;
+            }
+            servers.splice(index, 1);
+            renderServers();
+        }
+
+        // Add new server
+        document.getElementById('addServerBtn').addEventListener('click', function() {
+            servers.push({name: '', url: ''});
+            renderServers();
+        });
+
+        // Save settings
+        document.getElementById('saveSettingsBtn').addEventListener('click', async function() {
+            // Validate servers
+            for (let i = 0; i < servers.length; i++) {
+                const server = servers[i];
+                if (!server.name.trim()) {
+                    showError(`サーバー${i + 1}の名前を入力してください`);
+                    return;
+                }
+                if (!server.url.trim()) {
+                    showError(`サーバー${i + 1}のURLを入力してください`);
+                    return;
+                }
+            }
+
+            showLoading();
+            try {
+                const response = await fetch('/api/settings/recorder-servers', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        recorderServers: servers
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.text();
+                    throw new Error(errorData || '設定の保存に失敗しました');
+                }
+
+                showSuccess('設定を保存しました');
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

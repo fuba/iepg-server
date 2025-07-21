@@ -191,6 +191,21 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 		models.Log.Error("InitDB: Failed to create index on auto_reservation_logs.ruleId: %v", err)
 	}
 
+	// settingsテーブルの作成
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS settings (
+			id            INTEGER PRIMARY KEY,
+			recorder_urls TEXT NOT NULL DEFAULT '[]',
+			created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+			updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+		);
+	`)
+	if err != nil {
+		models.Log.Error("InitDB: Failed to create settings table: %v", err)
+		db.Close()
+		return nil, err
+	}
+
 	models.Log.Debug("InitDB: Database initialization completed successfully")
 	return db, nil
 }

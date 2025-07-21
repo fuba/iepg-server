@@ -105,6 +105,9 @@ func main() {
 
 	// 予約ハンドラーの初期化
 	reservationHandler := handlers.NewReservationHandler(dbConn, recorderURL)
+	
+	// 設定ハンドラーの初期化
+	settingsHandler := handlers.NewSettingsHandler(dbConn)
 
 	// 自動予約エンジンの初期化と開始
 	autoReservationEngine := services.NewAutoReservationEngine(dbConn, recorderURL)
@@ -172,6 +175,10 @@ func main() {
 	router.HandleFunc("/auto-reservations/rules/{id}", handlers.HandleDeleteAutoReservationRule(dbConn)).Methods("DELETE")
 	router.HandleFunc("/auto-reservations/logs", handlers.HandleGetAutoReservationLogs(dbConn)).Methods("GET")
 
+	// 設定関連のエンドポイント
+	router.HandleFunc("/api/settings", settingsHandler.GetSettings).Methods("GET")
+	router.HandleFunc("/api/settings/recorder-servers", settingsHandler.UpdateRecorderServers).Methods("POST")
+
 	// 静的ファイルの提供
 	fs := http.FileServer(http.Dir("./static"))
 	router.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
@@ -196,6 +203,12 @@ func main() {
 	router.HandleFunc("/ui/exclude-channels", func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Serving exclude channels UI")
 		http.ServeFile(w, r, "./static/exclude-channels.html")
+	})
+
+	// 設定UI
+	router.HandleFunc("/ui/settings", func(w http.ResponseWriter, r *http.Request) {
+		models.Log.Debug("Serving settings UI")
+		http.ServeFile(w, r, "./static/settings.html")
 	})
 
 	// 自動予約管理UI
