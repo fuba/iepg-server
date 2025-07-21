@@ -47,6 +47,9 @@
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-2xl font-bold text-gray-800">番組検索</h1>
             <div class="flex space-x-2">
+                <a href="/ui/settings" class="px-4 py-2 bg-green-500 text-white font-medium rounded-md hover:bg-green-600 focus:outline-none">
+                    設定
+                </a>
                 <a href="/ui/exclude-channels" class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none">
                     チャンネル除外設定
                 </a>
@@ -230,8 +233,10 @@
                         </div>
                         
                         <div class="mb-3">
-                            <label for="recorderUrl" class="block text-sm font-medium text-gray-700">録画サーバーURL</label>
-                            <input type="url" id="autoRecorderUrl" value="http://localhost:37569" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" required>
+                            <label for="autoRecorderUrl" class="block text-sm font-medium text-gray-700">録画サーバー</label>
+                            <select id="autoRecorderUrl" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" required>
+                                <option value="">読み込み中...</option>
+                            </select>
                         </div>
                         
                         <div class="flex items-center justify-between pt-4">
@@ -243,6 +248,39 @@
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 予約モーダル -->
+    <div id="reservationModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
+                    <svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                </div>
+                <div class="mt-2 text-center">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900" id="reservationModalTitle">番組を予約</h3>
+                    <div class="mt-4">
+                        <div class="mb-3">
+                            <label for="reservationRecorderSelect" class="block text-sm font-medium text-gray-700">録画サーバー</label>
+                            <select id="reservationRecorderSelect" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" required>
+                                <option value="">読み込み中...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="flex items-center justify-between pt-4">
+                            <button type="button" onclick="closeReservationModal()" class="px-4 py-2 bg-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-400 focus:outline-none">
+                                キャンセル
+                            </button>
+                            <button type="button" onclick="confirmReservation()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none">
+                                予約
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -629,24 +667,97 @@
                 .replace(/'/g, "&#039;");
         }
         
+        // Global variables for reservation modal
+        let currentReservationData = null;
+
         // ボタンのクリックイベント処理
         document.addEventListener('click', function(e) {
             if (e.target.classList.contains('reservation-btn')) {
                 const programId = e.target.dataset.programId;
                 const programName = e.target.dataset.programName;
                 
-                // 録画サーバーのURLを入力するダイアログ
-                const recorderUrl = prompt('録画サーバーのURLを入力してください\n(例: http://localhost:37569)\n空欄の場合は環境変数で設定されたデフォルトを使用します。', 'http://localhost:37569');
-                
-                if (recorderUrl !== null) { // nullはキャンセルボタンが押された場合
-                    // 予約処理
-                    makeReservation(programId, programName, recorderUrl);
-                }
+                // 予約モーダルを開く
+                openReservationModal(programId, programName);
             } else if (e.target.classList.contains('auto-reservation-btn')) {
                 const programData = JSON.parse(e.target.dataset.program);
                 openAutoReservationModal(programData);
             }
         });
+
+        // 予約モーダルを開く
+        async function openReservationModal(programId, programName) {
+            currentReservationData = { programId, programName };
+            
+            // モーダルタイトルを設定
+            document.getElementById('reservationModalTitle').textContent = `${programName} を予約`;
+            
+            // 録画サーバー一覧を読み込み
+            await loadRecorderServers();
+            
+            // モーダルを表示
+            document.getElementById('reservationModal').classList.remove('hidden');
+        }
+
+        // 予約モーダルを閉じる
+        function closeReservationModal() {
+            document.getElementById('reservationModal').classList.add('hidden');
+            currentReservationData = null;
+        }
+
+        // 録画サーバー一覧を読み込む
+        async function loadRecorderServers() {
+            const select = document.getElementById('reservationRecorderSelect');
+            
+            try {
+                const response = await fetch('/api/settings');
+                if (!response.ok) {
+                    throw new Error('設定の取得に失敗しました');
+                }
+                
+                const data = await response.json();
+                const servers = data.recorderServers || [];
+                
+                // セレクトボックスをクリア
+                select.innerHTML = '';
+                
+                if (servers.length === 0) {
+                    // デフォルトサーバーを追加
+                    const option = document.createElement('option');
+                    option.value = 'http://localhost:37569';
+                    option.textContent = 'Default Server (http://localhost:37569)';
+                    select.appendChild(option);
+                } else {
+                    // 設定されたサーバーを追加
+                    servers.forEach(server => {
+                        const option = document.createElement('option');
+                        option.value = server.url;
+                        option.textContent = `${server.name} (${server.url})`;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('録画サーバー一覧の読み込みエラー:', error);
+                // エラー時はデフォルトサーバーを表示
+                select.innerHTML = '<option value="http://localhost:37569">Default Server (http://localhost:37569)</option>';
+            }
+        }
+
+        // 予約確定
+        function confirmReservation() {
+            if (!currentReservationData) return;
+            
+            const selectedUrl = document.getElementById('reservationRecorderSelect').value;
+            if (!selectedUrl) {
+                alert('録画サーバーを選択してください');
+                return;
+            }
+            
+            // 予約処理
+            makeReservation(currentReservationData.programId, currentReservationData.programName, selectedUrl);
+            
+            // モーダルを閉じる
+            closeReservationModal();
+        }
         
         // 予約処理
         async function makeReservation(programId, programName, recorderUrl) {
@@ -703,11 +814,52 @@
             // フィールドの表示切り替え
             toggleAutoRuleFields();
             
+            // 録画サーバー一覧を読み込み
+            await loadAutoRecorderServers();
+            
             // 番組データを保存（作成時に使用）
             window.currentProgramData = programData;
             
             // モーダルを表示
             document.getElementById('autoReservationModal').classList.remove('hidden');
+        }
+
+        // 自動予約用の録画サーバー一覧を読み込む
+        async function loadAutoRecorderServers() {
+            const select = document.getElementById('autoRecorderUrl');
+            
+            try {
+                const response = await fetch('/api/settings');
+                if (!response.ok) {
+                    throw new Error('設定の取得に失敗しました');
+                }
+                
+                const data = await response.json();
+                const servers = data.recorderServers || [];
+                
+                // セレクトボックスをクリア
+                select.innerHTML = '';
+                
+                if (servers.length === 0) {
+                    // デフォルトサーバーを追加
+                    const option = document.createElement('option');
+                    option.value = 'http://localhost:37569';
+                    option.textContent = 'Default Server (http://localhost:37569)';
+                    select.appendChild(option);
+                } else {
+                    // 設定されたサーバーを追加
+                    servers.forEach(server => {
+                        const option = document.createElement('option');
+                        option.value = server.url;
+                        option.textContent = `${server.name} (${server.url})`;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('自動予約用録画サーバー一覧の読み込みエラー:', error);
+                // エラー時はデフォルトサーバーを表示
+                select.innerHTML = '<option value="http://localhost:37569">Default Server (http://localhost:37569)</option>';
+            }
         }
         
         // 自動予約モーダルを閉じる
