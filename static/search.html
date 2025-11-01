@@ -5,6 +5,49 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>番組検索</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Mobile Safari optimizations */
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* Prevent zoom on input focus in iOS */
+        input[type="text"],
+        input[type="number"],
+        select,
+        textarea {
+            font-size: 16px;
+        }
+        
+        /* Improve button touch targets */
+        button {
+            min-height: 44px;
+            touch-action: manipulation;
+        }
+        
+        /* Flatpickr mobile improvements */
+        .flatpickr-mobile {
+            font-size: 16px !important;
+        }
+        
+        .flatpickr-day {
+            min-height: 44px;
+            line-height: 44px;
+        }
+        
+        /* モバイルとデスクトップでの表示切り替え */
+        @media (max-width: 768px) {
+            .desktop-only {
+                display: none !important;
+            }
+        }
+        
+        @media (min-width: 769px) {
+            .mobile-only {
+                display: none !important;
+            }
+        }
+    </style>
     <script>
         tailwind.config = {
             theme: {
@@ -87,10 +130,13 @@
                     <div>
                         <label for="dateTimeFrom" class="block text-sm font-medium text-gray-700 mb-1">開始時間(From)</label>
                         <div class="flex space-x-2">
+                            <!-- モバイル用のネイティブ日付入力 -->
+                            <input type="datetime-local" id="dateTimeFromNative" class="mobile-only w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                            <!-- デスクトップ用のflatpickr入力 -->
                             <input type="text" id="dateTimeFrom" placeholder="カレンダーから選択" 
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                class="desktop-only w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                             <input type="hidden" id="startFrom" name="startFrom">
-                            <button type="button" id="setNowFrom" class="px-3 py-2 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none">
+                            <button type="button" id="setNowFrom" class="px-3 py-2 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none whitespace-nowrap">
                                 現在
                             </button>
                         </div>
@@ -98,10 +144,13 @@
                     <div>
                         <label for="dateTimeTo" class="block text-sm font-medium text-gray-700 mb-1">開始時間(To)</label>
                         <div class="flex space-x-2">
+                            <!-- モバイル用のネイティブ日付入力 -->
+                            <input type="datetime-local" id="dateTimeToNative" class="mobile-only w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                            <!-- デスクトップ用のflatpickr入力 -->
                             <input type="text" id="dateTimeTo" placeholder="カレンダーから選択" 
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                class="desktop-only w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                             <input type="hidden" id="startTo" name="startTo">
-                            <button type="button" id="setNowTo" class="px-3 py-2 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none">
+                            <button type="button" id="setNowTo" class="px-3 py-2 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none whitespace-nowrap">
                                 現在
                             </button>
                         </div>
@@ -110,16 +159,16 @@
                 <div class="py-2">
                     <p class="text-sm font-medium text-gray-700 mb-2">時間範囲</p>
                     <div class="flex flex-wrap gap-2">
-                        <button type="button" id="setToday" class="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-md hover:bg-blue-200">
+                        <button type="button" id="setToday" class="px-4 py-2 bg-blue-100 text-blue-800 text-sm rounded-md hover:bg-blue-200 active:bg-blue-300">
                             今日
                         </button>
-                        <button type="button" id="setTomorrow" class="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-md hover:bg-blue-200">
+                        <button type="button" id="setTomorrow" class="px-4 py-2 bg-blue-100 text-blue-800 text-sm rounded-md hover:bg-blue-200 active:bg-blue-300">
                             明日
                         </button>
-                        <button type="button" id="setWeek" class="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-md hover:bg-blue-200">
+                        <button type="button" id="setWeek" class="px-4 py-2 bg-blue-100 text-blue-800 text-sm rounded-md hover:bg-blue-200 active:bg-blue-300">
                             1週間
                         </button>
-                        <button type="button" id="clearTime" class="px-3 py-1 bg-gray-100 text-gray-800 text-sm rounded-md hover:bg-gray-200">
+                        <button type="button" id="clearTime" class="px-4 py-2 bg-gray-100 text-gray-800 text-sm rounded-md hover:bg-gray-200 active:bg-gray-300">
                             クリア
                         </button>
                     </div>
@@ -438,97 +487,194 @@
         // 初期化時にサービス一覧を読み込み
         document.addEventListener('DOMContentLoaded', loadServices);
         
-        // flatpickrの初期化
-        const flatpickrOptions = {
-            enableTime: true,
-            dateFormat: "Y/m/d H:i",
-            locale: "ja",
-            time_24hr: true,
-            onChange: function(selectedDates, dateStr, instance) {
-                if (instance.element.id === 'dateTimeFrom') {
-                    document.getElementById('startFrom').value = selectedDates[0].getTime();
-                } else if (instance.element.id === 'dateTimeTo') {
-                    document.getElementById('startTo').value = selectedDates[0].getTime();
+        // モバイル検出
+        function isMobile() {
+            return window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+        
+        let dateTimeFromPicker, dateTimeToPicker;
+        
+        // デスクトップ用flatpickrの初期化
+        if (!isMobile()) {
+            const flatpickrOptions = {
+                enableTime: true,
+                dateFormat: "Y/m/d H:i",
+                locale: "ja",
+                time_24hr: true,
+                allowInput: true,
+                onChange: function(selectedDates, dateStr, instance) {
+                    if (selectedDates.length > 0) {
+                        if (instance.element.id === 'dateTimeFrom') {
+                            document.getElementById('startFrom').value = selectedDates[0].getTime();
+                        } else if (instance.element.id === 'dateTimeTo') {
+                            document.getElementById('startTo').value = selectedDates[0].getTime();
+                        }
+                    }
                 }
-            }
-        };
+            };
+            
+            dateTimeFromPicker = flatpickr("#dateTimeFrom", flatpickrOptions);
+            dateTimeToPicker = flatpickr("#dateTimeTo", flatpickrOptions);
+        }
         
-        const dateTimeFromPicker = flatpickr("#dateTimeFrom", flatpickrOptions);
-        const dateTimeToPicker = flatpickr("#dateTimeTo", flatpickrOptions);
+        // モバイル用ネイティブ日付入力のイベントリスナー
+        if (isMobile()) {
+            document.getElementById('dateTimeFromNative').addEventListener('change', function() {
+                if (this.value) {
+                    const date = new Date(this.value);
+                    document.getElementById('startFrom').value = date.getTime();
+                }
+            });
+            
+            document.getElementById('dateTimeToNative').addEventListener('change', function() {
+                if (this.value) {
+                    const date = new Date(this.value);
+                    document.getElementById('startTo').value = date.getTime();
+                }
+            });
+        }
         
-        // 時刻を日付形式に表示する関数
+        // 時刻を日付形式に表示する関数 (互換性のため残す)
         function updateDateTimeDisplay(timestamp, elementId) {
             if (timestamp) {
                 const date = new Date(parseInt(timestamp));
-                if (elementId === 'dateTimeFrom') {
-                    dateTimeFromPicker.setDate(date);
-                } else if (elementId === 'dateTimeTo') {
-                    dateTimeToPicker.setDate(date);
+                if (isMobile()) {
+                    if (elementId === 'dateTimeFrom') {
+                        document.getElementById('dateTimeFromNative').value = formatDateTimeLocal(date);
+                    } else if (elementId === 'dateTimeTo') {
+                        document.getElementById('dateTimeToNative').value = formatDateTimeLocal(date);
+                    }
+                } else {
+                    if (elementId === 'dateTimeFrom' && dateTimeFromPicker) {
+                        dateTimeFromPicker.setDate(date, true, 'Y/m/d H:i');
+                    } else if (elementId === 'dateTimeTo' && dateTimeToPicker) {
+                        dateTimeToPicker.setDate(date, true, 'Y/m/d H:i');
+                    }
                 }
             }
         }
         
+        // 日付をYYYY-MM-DDTHH:mm形式に変換する関数
+        function formatDateTimeLocal(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+        
         // 現在時刻ボタンの設定
-        document.getElementById('setNowFrom').addEventListener('click', function() {
-            const now = Date.now();
-            document.getElementById('startFrom').value = now;
-            updateDateTimeDisplay(now, 'dateTimeFrom');
+        function setCurrentTime(targetElement, isFrom) {
+            const now = new Date();
+            const timestamp = now.getTime();
+            
+            if (isFrom) {
+                document.getElementById('startFrom').value = timestamp;
+                if (isMobile()) {
+                    document.getElementById('dateTimeFromNative').value = formatDateTimeLocal(now);
+                } else if (dateTimeFromPicker) {
+                    dateTimeFromPicker.setDate(now, true, 'Y/m/d H:i');
+                }
+            } else {
+                document.getElementById('startTo').value = timestamp;
+                if (isMobile()) {
+                    document.getElementById('dateTimeToNative').value = formatDateTimeLocal(now);
+                } else if (dateTimeToPicker) {
+                    dateTimeToPicker.setDate(now, true, 'Y/m/d H:i');
+                }
+            }
+        }
+        
+        document.getElementById('setNowFrom').addEventListener('click', function(e) {
+            e.preventDefault();
+            setCurrentTime('dateTimeFrom', true);
         });
         
-        document.getElementById('setNowTo').addEventListener('click', function() {
-            const now = Date.now();
-            document.getElementById('startTo').value = now;
-            updateDateTimeDisplay(now, 'dateTimeTo');
+        document.getElementById('setNowTo').addEventListener('click', function(e) {
+            e.preventDefault();
+            setCurrentTime('dateTimeTo', false);
         });
+        
+        // タッチイベントもサポートするヘルパー関数
+        function addClickAndTouchEvent(element, handler) {
+            element.addEventListener('click', handler);
+            element.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                handler(e);
+            }, { passive: false });
+        }
         
         // 日付範囲ボタンの設定
-        document.getElementById('setToday').addEventListener('click', function() {
+        addClickAndTouchEvent(document.getElementById('setToday'), function(e) {
+            e.preventDefault();
             const now = new Date();
-            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
-            const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).getTime();
+            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+            const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
             
-            document.getElementById('startFrom').value = startOfDay;
-            document.getElementById('startTo').value = endOfDay;
+            document.getElementById('startFrom').value = startOfDay.getTime();
+            document.getElementById('startTo').value = endOfDay.getTime();
             
-            updateDateTimeDisplay(startOfDay, 'dateTimeFrom');
-            updateDateTimeDisplay(endOfDay, 'dateTimeTo');
+            if (isMobile()) {
+                document.getElementById('dateTimeFromNative').value = formatDateTimeLocal(startOfDay);
+                document.getElementById('dateTimeToNative').value = formatDateTimeLocal(endOfDay);
+            } else {
+                if (dateTimeFromPicker) dateTimeFromPicker.setDate(startOfDay, true, 'Y/m/d H:i');
+                if (dateTimeToPicker) dateTimeToPicker.setDate(endOfDay, true, 'Y/m/d H:i');
+            }
         });
         
-        document.getElementById('setTomorrow').addEventListener('click', function() {
+        addClickAndTouchEvent(document.getElementById('setTomorrow'), function(e) {
+            e.preventDefault();
             const now = new Date();
             const tomorrow = new Date(now);
             tomorrow.setDate(tomorrow.getDate() + 1);
             
-            const startOfDay = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 0, 0, 0).getTime();
-            const endOfDay = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59).getTime();
+            const startOfDay = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 0, 0, 0);
+            const endOfDay = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59);
             
-            document.getElementById('startFrom').value = startOfDay;
-            document.getElementById('startTo').value = endOfDay;
+            document.getElementById('startFrom').value = startOfDay.getTime();
+            document.getElementById('startTo').value = endOfDay.getTime();
             
-            updateDateTimeDisplay(startOfDay, 'dateTimeFrom');
-            updateDateTimeDisplay(endOfDay, 'dateTimeTo');
+            if (isMobile()) {
+                document.getElementById('dateTimeFromNative').value = formatDateTimeLocal(startOfDay);
+                document.getElementById('dateTimeToNative').value = formatDateTimeLocal(endOfDay);
+            } else {
+                if (dateTimeFromPicker) dateTimeFromPicker.setDate(startOfDay, true, 'Y/m/d H:i');
+                if (dateTimeToPicker) dateTimeToPicker.setDate(endOfDay, true, 'Y/m/d H:i');
+            }
         });
         
-        document.getElementById('setWeek').addEventListener('click', function() {
+        addClickAndTouchEvent(document.getElementById('setWeek'), function(e) {
+            e.preventDefault();
             const now = new Date();
             const nextWeek = new Date(now);
             nextWeek.setDate(nextWeek.getDate() + 7);
             
-            const currentTime = now.getTime();
-            const nextWeekTime = nextWeek.getTime();
+            document.getElementById('startFrom').value = now.getTime();
+            document.getElementById('startTo').value = nextWeek.getTime();
             
-            document.getElementById('startFrom').value = currentTime;
-            document.getElementById('startTo').value = nextWeekTime;
-            
-            updateDateTimeDisplay(currentTime, 'dateTimeFrom');
-            updateDateTimeDisplay(nextWeekTime, 'dateTimeTo');
+            if (isMobile()) {
+                document.getElementById('dateTimeFromNative').value = formatDateTimeLocal(now);
+                document.getElementById('dateTimeToNative').value = formatDateTimeLocal(nextWeek);
+            } else {
+                if (dateTimeFromPicker) dateTimeFromPicker.setDate(now, true, 'Y/m/d H:i');
+                if (dateTimeToPicker) dateTimeToPicker.setDate(nextWeek, true, 'Y/m/d H:i');
+            }
         });
         
-        document.getElementById('clearTime').addEventListener('click', function() {
+        addClickAndTouchEvent(document.getElementById('clearTime'), function(e) {
+            e.preventDefault();
             document.getElementById('startFrom').value = '';
             document.getElementById('startTo').value = '';
-            dateTimeFromPicker.clear();
-            dateTimeToPicker.clear();
+            
+            if (isMobile()) {
+                document.getElementById('dateTimeFromNative').value = '';
+                document.getElementById('dateTimeToNative').value = '';
+            } else {
+                if (dateTimeFromPicker) dateTimeFromPicker.clear();
+                if (dateTimeToPicker) dateTimeToPicker.clear();
+            }
         });
         
         document.getElementById('searchForm').addEventListener('submit', function(e) {
