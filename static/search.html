@@ -44,16 +44,16 @@
 </head>
 <body class="bg-gray-50">
     <div class="container mx-auto px-4 py-8 max-w-7xl">
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <h1 class="text-2xl font-bold text-gray-800">番組検索</h1>
-            <div class="flex space-x-2">
-                <a href="/ui/settings" class="px-4 py-2 bg-green-500 text-white font-medium rounded-md hover:bg-green-600 focus:outline-none">
+            <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+                <a href="/ui/settings" class="px-4 py-2 bg-green-500 text-white font-medium rounded-md hover:bg-green-600 focus:outline-none text-sm sm:text-base">
                     設定
                 </a>
-                <a href="/ui/exclude-channels" class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none">
+                <a href="/ui/exclude-channels" class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none text-sm sm:text-base">
                     チャンネル除外設定
                 </a>
-                <a href="/ui/auto-reservation" class="px-4 py-2 bg-blue-500 text-white font-medium rounded-md hover:bg-blue-600 focus:outline-none">
+                <a href="/ui/auto-reservation" class="px-4 py-2 bg-blue-500 text-white font-medium rounded-md hover:bg-blue-600 focus:outline-none text-sm sm:text-base">
                     自動予約管理
                 </a>
             </div>
@@ -597,22 +597,23 @@
                                 <a href="/program/${program.id}" class="text-indigo-600 hover:text-indigo-900 hover:underline" target="_blank">${program.id}</a>
                             </td>
                             <td class="px-3 py-2 text-sm">
-                                <div class="flex flex-wrap items-center">
-                                    <div class="w-40 font-medium text-gray-700" title="${escapeHtml(program.stationName || `Service ${program.serviceId}`)}">
+                                <div class="flex flex-wrap gap-2 sm:gap-3 items-start sm:items-center">
+                                    <div class="w-full sm:w-40 font-medium text-gray-700 break-words" title="${escapeHtml(program.stationName || `Service ${program.serviceId}`)}">
                                         ${escapeHtml(program.stationName || `Service ${program.serviceId}`)}
                                     </div>
-                                    <div class="flex-1 font-medium text-gray-900 truncate" title="${escapeHtml(program.name)}">
+                                    <div class="w-full sm:flex-1 font-medium text-gray-900 break-words" title="${escapeHtml(program.name)}">
                                         ${escapeHtml(program.name)}
                                     </div>
-                                    <div class="ml-4 whitespace-nowrap text-sm text-gray-600">
+                                    <div class="w-full sm:w-auto whitespace-nowrap text-sm text-gray-600">
                                         ${formatDate(startDate)} 〜 ${formatDate(endDate)}
                                     </div>
-                                    <button class="ml-2 px-3 py-1 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700 focus:outline-none reservation-btn" 
+                                    <div class="w-full sm:w-auto flex gap-2 mt-2 sm:mt-0">
+                                        <button class="px-3 py-1 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700 focus:outline-none reservation-btn" 
                                         data-program-id="${program.id}" 
                                         data-program-name="${escapeHtml(program.name)}">
-                                        予約
-                                    </button>
-                                    <button class="ml-1 px-3 py-1 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 focus:outline-none auto-reservation-btn" 
+                                            予約
+                                        </button>
+                                        <button class="px-3 py-1 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 focus:outline-none auto-reservation-btn" 
                                         data-program='${JSON.stringify({
                                             id: program.id,
                                             name: program.name,
@@ -620,8 +621,9 @@
                                             serviceId: program.serviceId,
                                             stationName: program.stationName
                                         })}'>
-                                        自動予約
-                                    </button>
+                                            自動予約
+                                        </button>
+                                    </div>
                                 </div>
                             </td>
                         `;
