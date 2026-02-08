@@ -118,6 +118,10 @@ func StartServiceEventStream(ctx context.Context, mirakurunBaseURL string) {
 					switch event.Type {
 					case "create", "update":
 						service := convertToService(&event.Data)
+						if service.Type == 192 {
+							models.Log.Debug("ServiceEventStream: Skipping always-excluded service: %d - %s (Type=192)", service.ServiceID, service.Name)
+							continue
+						}
 						models.ServiceMapInstance.Update(service)
 						models.Log.Debug("ServiceEventStream: Updated service: %d - %s", service.ServiceID, service.Name)
 					case "remove":
@@ -189,6 +193,9 @@ func fetchServices(ctx context.Context, mirakurunBaseURL string) {
 	count := 0
 	for _, svc := range services {
 		service := convertToService(&svc)
+		if service.Type == 192 {
+			continue // Always-excluded services should not be in ServiceMap
+		}
 		models.ServiceMapInstance.Update(service)
 		count++
 	}
@@ -216,17 +223,20 @@ func convertToService(resp *mirakurunServiceResponse) *models.Service {
 		service.ChannelName = resp.Channel.Name
 		service.ChannelTSMFRel = resp.Channel.TSMFRel
 		
-		// ChannelTypeに基づいてTypeも設定（重複更新になるが整合性を確保）
+		// ChannelType based type override ONLY for non-192 services
+		// Type=192 is always-excluded (e.g. スカパー！インフォ) and must preserve original type
 		// GR=地上波=1, BS=2, CS=3
-		switch resp.Channel.Type {
-		case "GR":
-			service.Type = 1
-		case "BS":
-			service.Type = 2
-		case "CS":
-			service.Type = 3
-		default:
-			// 既存のTypeをそのまま使用
+		if resp.Type != 192 {
+			switch resp.Channel.Type {
+			case "GR":
+				service.Type = 1
+			case "BS":
+				service.Type = 2
+			case "CS":
+				service.Type = 3
+			default:
+				// 既存のTypeをそのまま使用
+			}
 		}
 	}
 	
