@@ -18,7 +18,7 @@ services:
       - ENABLE_CLEANUP=true
       - SKIP_INITIAL_LOAD=false
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:40870/services", "||", "exit", "1"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:40870/health"]
       interval: 30s
       timeout: 10s
       retries: 3

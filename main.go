@@ -127,6 +127,12 @@ func main() {
 	// ルーターの設定
 	router := mux.NewRouter()
 
+	// Health check endpoint
+	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+
 	// HTTPエンドポイントの設定
 	router.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
 		models.Log.Debug("Handling search request: %s", r.URL.String())
