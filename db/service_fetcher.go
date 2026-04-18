@@ -121,8 +121,22 @@ func StartServiceEventStream(ctx context.Context, mirakurunBaseURL string) {
 						models.ServiceMapInstance.Update(service)
 						models.Log.Debug("ServiceEventStream: Updated service: %d - %s", service.ServiceID, service.Name)
 					case "remove":
-						models.ServiceMapInstance.Remove(event.Data.ServiceID)
-						models.Log.Debug("ServiceEventStream: Removed service: %d", event.Data.ServiceID)
+						// Mirakurun remove イベントは基本的に `id` (Mirakurun unique ID) を含むが、
+						// 古い/欠損ペイロードに備えて優先順位でフォールバックする。
+						switch {
+						case event.Data.ID != 0:
+							models.ServiceMapInstance.Remove(event.Data.ID)
+							models.Log.Debug("ServiceEventStream: Removed service by mirakurunID=%d", event.Data.ID)
+						case event.Data.NetworkID != 0:
+							id := models.MirakurunID(event.Data.NetworkID, event.Data.ServiceID)
+							models.ServiceMapInstance.Remove(id)
+							models.Log.Debug("ServiceEventStream: Removed service by composed mirakurunID=%d (networkID=%d, serviceID=%d)",
+								id, event.Data.NetworkID, event.Data.ServiceID)
+						default:
+							n := models.ServiceMapInstance.RemoveByServiceID(event.Data.ServiceID)
+							models.Log.Debug("ServiceEventStream: Removed %d service(s) by serviceID=%d (fallback)",
+								n, event.Data.ServiceID)
+						}
 					}
 				}
 			}

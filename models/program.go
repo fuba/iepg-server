@@ -16,6 +16,7 @@ type Series struct {
 type Program struct {
 	ID                int64  `json:"id"`
 	ServiceID         int64  `json:"serviceId"`
+	NetworkID         int64  `json:"networkId"`
 	StartAt           int64  `json:"startAt"`
 	Duration          int64  `json:"duration"`
 	Name              string `json:"name"`

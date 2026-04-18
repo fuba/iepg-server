@@ -2,8 +2,15 @@
 package models
 
 import (
+	"sort"
 	"sync"
 )
+
+// MirakurunID composes the Mirakurun unique ID from networkID and serviceID.
+// Matches Mirakurun's encoding: id = networkID * 100000 + serviceID.
+func MirakurunID(networkID, serviceID int64) int64 {
+	return networkID*100000 + serviceID
+}
 
 // Service はMirakurunから取得するサービス情報（テレビ局情報）の構造体
 type Service struct {
@@ -34,10 +41,11 @@ type ChannelInfo struct {
 	TSMFRel int    `json:"tsmfRelTs,omitempty"`
 }
 
-// ServiceMap はサービスIDをキーとしてServiceの参照を保持するマップ
+// ServiceMap は Mirakurun ID (service.ID = networkID*100000+serviceID) をキーとして
+// Service の参照を保持するマップ。同じ serviceID でも networkID が異なれば別要素として扱う。
 type ServiceMap struct {
 	mu       sync.RWMutex
-	services map[int64]*Service // サービスIDをキーにしたマップ
+	services map[int64]*Service // Mirakurun ID (service.ID) をキーにしたマップ
 }
 
 // NewServiceMap は新しいServiceMapを作成する
@@ -51,29 +59,60 @@ func NewServiceMap() *ServiceMap {
 func (sm *ServiceMap) Add(service *Service) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	sm.services[service.ServiceID] = service
+	sm.services[service.ID] = service
 }
 
 // Update はサービス情報を更新する
 func (sm *ServiceMap) Update(service *Service) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	sm.services[service.ServiceID] = service
+	sm.services[service.ID] = service
 }
 
-// Remove はサービス情報を削除する
-func (sm *ServiceMap) Remove(serviceID int64) {
+// Remove は Mirakurun ID でサービス情報を削除する
+func (sm *ServiceMap) Remove(mirakurunID int64) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	delete(sm.services, serviceID)
+	delete(sm.services, mirakurunID)
 }
 
-// Get はサービスIDからサービス情報を取得する
-func (sm *ServiceMap) Get(serviceID int64) (*Service, bool) {
+// Get は Mirakurun ID からサービス情報を取得する
+func (sm *ServiceMap) Get(mirakurunID int64) (*Service, bool) {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
-	service, ok := sm.services[serviceID]
+	service, ok := sm.services[mirakurunID]
 	return service, ok
+}
+
+// GetByServiceID は serviceID に一致するすべての Service を、
+// Mirakurun ID (service.ID) 昇順で決定的に返す。
+// networkID 情報が無い文脈（excluded_services 等）からの後方互換用。
+func (sm *ServiceMap) GetByServiceID(serviceID int64) []*Service {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	var result []*Service
+	for _, s := range sm.services {
+		if s.ServiceID == serviceID {
+			result = append(result, s)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	return result
+}
+
+// RemoveByServiceID は serviceID に一致するすべての Service を削除する。
+// Mirakurun ID が判らない remove イベントのフォールバック用。
+func (sm *ServiceMap) RemoveByServiceID(serviceID int64) int {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	removed := 0
+	for id, s := range sm.services {
+		if s.ServiceID == serviceID {
+			delete(sm.services, id)
+			removed++
+		}
+	}
+	return removed
 }
 
 // GetAll はすべてのサービス情報を取得する

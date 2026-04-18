@@ -12,7 +12,7 @@ services:
       - PORT=40870
       - LOG_LEVEL=info
       - DB_PATH=/app/data/programs.db
-      - MIRAKURUN_URL=http://localhost:40772/api
+      - MIRAKURUN_URL=http://tuner:40772/api
       - RECORDER_URL=http://localhost:37569
       - ENABLE_AUTO_RESERVATION=true
       - ENABLE_CLEANUP=true
