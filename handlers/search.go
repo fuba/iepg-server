@@ -92,8 +92,16 @@ func HandleSimpleSearch(w http.ResponseWriter, r *http.Request, dbConn *sql.DB) 
 		programs[i].Name = normalizeSpecialCharacters(programs[i].Name)
 		programs[i].Description = normalizeSpecialCharacters(programs[i].Description)
 		
-		// サービス情報を付与
-		if service, ok := models.ServiceMapInstance.Get(programs[i].ServiceID); ok {
+		// サービス情報を付与 (Mirakurun ID で引く; networkID が 0 なら serviceID のみで一致する先頭要素)
+		mirakurunID := models.MirakurunID(programs[i].NetworkID, programs[i].ServiceID)
+		service, ok := models.ServiceMapInstance.Get(mirakurunID)
+		if !ok {
+			if candidates := models.ServiceMapInstance.GetByServiceID(programs[i].ServiceID); len(candidates) > 0 {
+				service = candidates[0]
+				ok = true
+			}
+		}
+		if ok {
 			// テレビ局情報を付与
 			programs[i].StationName = service.Name
 			
@@ -343,8 +351,8 @@ func HandleAddExcludedService(w http.ResponseWriter, r *http.Request, dbConn *sq
 	
 	// サービス名が空の場合、ServiceMapから名前を取得
 	if service.Name == "" {
-		if svc, ok := models.ServiceMapInstance.Get(service.ServiceID); ok {
-			service.Name = svc.Name
+		if candidates := models.ServiceMapInstance.GetByServiceID(service.ServiceID); len(candidates) > 0 {
+			service.Name = candidates[0].Name
 			models.Log.Debug("HandleAddExcludedService: Found service name from ServiceMap: %s", service.Name)
 		} else {
 			service.Name = fmt.Sprintf("Service %d", service.ServiceID)

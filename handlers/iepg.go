@@ -67,7 +67,15 @@ func HandleIEPG(w http.ResponseWriter, r *http.Request, dbConn *sql.DB) {
 	// 番組に対応するサービス（テレビ局）情報を取得
 	var stationId, stationName, channelType, channelNumber string
 	var serviceId int64
-	if service, ok := models.ServiceMapInstance.Get(p.ServiceID); ok {
+	mirakurunID := models.MirakurunID(p.NetworkID, p.ServiceID)
+	service, ok := models.ServiceMapInstance.Get(mirakurunID)
+	if !ok {
+		if candidates := models.ServiceMapInstance.GetByServiceID(p.ServiceID); len(candidates) > 0 {
+			service = candidates[0]
+			ok = true
+		}
+	}
+	if ok {
 		// リモコンキーIDあるいはサービスIDを文字列に変換
 		if service.RemoteControlKeyID > 0 {
 			stationId = fmt.Sprintf("%04d", service.RemoteControlKeyID)

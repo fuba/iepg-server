@@ -18,6 +18,32 @@ import (
 	"github.com/fuba/iepg-server/models"
 )
 
+// hasColumn は指定テーブルに指定カラムが存在するかを PRAGMA table_info で判定する。
+func hasColumn(db *sql.DB, table, column string) (bool, error) {
+	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			cid     int
+			name    string
+			ctype   string
+			notnull int
+			dflt    sql.NullString
+			pk      int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
+}
+
 // InitDB は、programsテーブルと除外チャンネルテーブルを作成する。
 func InitDB(dataSourceName string) (*sql.DB, error) {
 	models.Log.Debug("InitDB: Connecting to database: %s", dataSourceName)
@@ -41,6 +67,7 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 		CREATE TABLE IF NOT EXISTS programs (
 			id            INTEGER PRIMARY KEY,
 			serviceId     INTEGER,
+			networkId     INTEGER DEFAULT 0,
 			startAt       INTEGER,
 			duration      INTEGER,
 			name          TEXT,
@@ -60,6 +87,43 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 		models.Log.Error("InitDB: Failed to create programs table: %v", err)
 		db.Close()
 		return nil, err
+	}
+
+	// 既存 DB 向けマイグレーション: networkId カラムが無ければ追加
+	hasNetworkID, err := hasColumn(db, "programs", "networkId")
+	if err != nil {
+		models.Log.Error("InitDB: Failed to inspect programs columns: %v", err)
+		db.Close()
+		return nil, err
+	}
+	if !hasNetworkID {
+		if _, err := db.Exec(`ALTER TABLE programs ADD COLUMN networkId INTEGER DEFAULT 0`); err != nil {
+			models.Log.Error("InitDB: Failed to add networkId column: %v", err)
+			db.Close()
+			return nil, err
+		}
+		models.Log.Info("InitDB: Added networkId column to programs table")
+	}
+
+	// 既存行の networkId=0 を Mirakurun program ID から逆算してバックフィル。
+	// Mirakurun は id = networkId*10^10 + serviceId*10^5 + eventId で構成するため、
+	// 桁構成と (id/10^5)%10^5 == serviceId で整合が取れるものだけ更新する。
+	res, err := db.Exec(`
+		UPDATE programs
+		SET networkId = id / 10000000000
+		WHERE networkId = 0
+		  AND id >= 10000000000
+		  AND (id / 100000) % 100000 = serviceId
+	`)
+	if err != nil {
+		models.Log.Error("InitDB: Failed to backfill networkId: %v", err)
+	} else if n, _ := res.RowsAffected(); n > 0 {
+		models.Log.Info("InitDB: Backfilled networkId for %d programs", n)
+	}
+
+	// networkId を含むインデックス
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_programs_networkId_serviceId ON programs(networkId, serviceId)`); err != nil {
+		models.Log.Error("InitDB: Failed to create networkId_serviceId index: %v", err)
 	}
 
 	// 除外チャンネルテーブルの作成
@@ -346,10 +410,10 @@ func StartStreamFetcher(ctx context.Context, db *sql.DB, apiURL string) {
 						
 						_, err = db.Exec(`
 							INSERT OR REPLACE INTO programs
-								(id, serviceId, startAt, duration, name, description, nameForSearch, descForSearch,
+								(id, serviceId, networkId, startAt, duration, name, description, nameForSearch, descForSearch,
 								 seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt)
-							VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-						`, p.ID, p.ServiceID, p.StartAt, p.Duration, p.Name, p.Description, p.NameForSearch, p.DescForSearch,
+							VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+						`, p.ID, p.ServiceID, p.NetworkID, p.StartAt, p.Duration, p.Name, p.Description, p.NameForSearch, p.DescForSearch,
 						   seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt)
 
 						if err != nil {
@@ -546,7 +610,7 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64, c
 
 		// クエリの基本部分を構築
 		query = `
-			SELECT id, serviceId, startAt, duration, name, description,
+			SELECT id, serviceId, networkId, startAt, duration, name, description,
 				   seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt
 			FROM programs
 			WHERE 1=1
@@ -602,7 +666,7 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64, c
 		models.Log.Debug("SearchPrograms: Added negative search conditions: %v", negativeTerms)
 		models.Log.Debug("SearchPrograms: Query after all search conditions: %s", query)
 	} else {
-		query = `SELECT id, serviceId, startAt, duration, name, description,
+		query = `SELECT id, serviceId, networkId, startAt, duration, name, description,
 				 seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt
 				 FROM programs`
 		models.Log.Debug("SearchPrograms: Using regular query without search terms")
@@ -722,7 +786,7 @@ func SearchPrograms(db *sql.DB, q string, serviceId, startFrom, startTo int64, c
 		var seriesName sql.NullString
 		var seriesExpiresAt sql.NullInt64
 		
-		if err := rows.Scan(&p.ID, &p.ServiceID, &p.StartAt, &p.Duration, &p.Name, &p.Description,
+		if err := rows.Scan(&p.ID, &p.ServiceID, &p.NetworkID, &p.StartAt, &p.Duration, &p.Name, &p.Description,
 			&seriesId, &seriesEpisode, &seriesLastEpisode, &seriesName, &seriesRepeat, &seriesPattern, &seriesExpiresAt); err != nil {
 			models.Log.Error("SearchPrograms: Scan error: %v", err)
 			return nil, err
@@ -760,10 +824,10 @@ func GetProgramByID(db *sql.DB, id int64) (*models.Program, error) {
 	var seriesName sql.NullString
 	var seriesExpiresAt sql.NullInt64
 	
-	err := db.QueryRow(`SELECT id, serviceId, startAt, duration, name, description,
-						seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt 
+	err := db.QueryRow(`SELECT id, serviceId, networkId, startAt, duration, name, description,
+						seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt
 						FROM programs WHERE id = ?`, id).
-		Scan(&p.ID, &p.ServiceID, &p.StartAt, &p.Duration, &p.Name, &p.Description,
+		Scan(&p.ID, &p.ServiceID, &p.NetworkID, &p.StartAt, &p.Duration, &p.Name, &p.Description,
 			 &seriesId, &seriesEpisode, &seriesLastEpisode, &seriesName, &seriesRepeat, &seriesPattern, &seriesExpiresAt)
 
 	if err != nil {
@@ -894,8 +958,10 @@ func GetExcludedServices(db *sql.DB) ([]models.ExcludedService, error) {
 			return nil, err
 		}
 		
-		// サービスマップから追加情報を取得
-		if service, ok := models.ServiceMapInstance.Get(s.ServiceID); ok {
+		// サービスマップから追加情報を取得 (excluded_services は serviceId のみ保持なので GetByServiceID を使用)
+		candidates := models.ServiceMapInstance.GetByServiceID(s.ServiceID)
+		if len(candidates) > 0 {
+			service := candidates[0]
 			s.Type = service.Type
 			s.NetworkID = service.NetworkID
 			s.RemoteControlKeyID = service.RemoteControlKeyID
@@ -1044,9 +1110,9 @@ func InitProgramsFromAPI(ctx context.Context, db *sql.DB, mirakurunBaseURL strin
 
 	// バッチインサートのためのステートメント準備
 	stmtPrograms, err := tx.Prepare(`
-		INSERT INTO programs (id, serviceId, startAt, duration, name, description, nameForSearch, descForSearch,
+		INSERT INTO programs (id, serviceId, networkId, startAt, duration, name, description, nameForSearch, descForSearch,
 							  seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 	`)
 	if err != nil {
 		tx.Rollback()
@@ -1076,7 +1142,7 @@ func InitProgramsFromAPI(ctx context.Context, db *sql.DB, mirakurunBaseURL strin
 			seriesExpiresAt = p.Series.ExpiresAt
 		}
 		
-		_, err = stmtPrograms.Exec(p.ID, p.ServiceID, p.StartAt, p.Duration, p.Name, p.Description, p.NameForSearch, p.DescForSearch,
+		_, err = stmtPrograms.Exec(p.ID, p.ServiceID, p.NetworkID, p.StartAt, p.Duration, p.Name, p.Description, p.NameForSearch, p.DescForSearch,
 								  seriesId, seriesEpisode, seriesLastEpisode, seriesName, seriesRepeat, seriesPattern, seriesExpiresAt)
 		if err != nil {
 			tx.Rollback()
