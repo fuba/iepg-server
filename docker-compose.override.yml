@@ -6,7 +6,6 @@ services:
   iepg-server:
     environment:
       - LOG_LEVEL=debug
-      - SKIP_INITIAL_LOAD=true  # 開発環境では初期ロードをスキップ
     volumes:
       # 開発時は静的ファイルもマウント
       - ./static:/app/static
