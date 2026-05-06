@@ -47,6 +47,124 @@
                 display: none !important;
             }
         }
+
+        .guide-grid {
+            background-image:
+                linear-gradient(to bottom, rgba(148, 163, 184, 0.18) 1px, transparent 1px);
+            background-size: 100% 96px;
+        }
+
+        .guide-time-column {
+            width: 72px;
+            min-width: 72px;
+        }
+
+        .guide-channel-column {
+            width: 220px;
+            min-width: 220px;
+        }
+
+        .guide-program-card {
+            min-height: 56px;
+            cursor: pointer;
+        }
+
+        .guide-program-card.hover-active {
+            z-index: 40;
+        }
+
+        .guide-hover-locked .guide-program-card {
+            pointer-events: none;
+        }
+
+        .guide-hover-locked .guide-program-card.hover-active {
+            pointer-events: auto;
+        }
+
+        .guide-program-card.compact {
+            padding-top: 0.45rem;
+            padding-bottom: 0.45rem;
+        }
+
+        .guide-program-card.compact .guide-card-title {
+            -webkit-line-clamp: 1;
+            font-size: 0.75rem;
+            line-height: 1rem;
+        }
+
+        .guide-program-card.compact .guide-card-time {
+            font-size: 0.625rem;
+            line-height: 0.875rem;
+        }
+
+        .guide-program-card.medium .guide-card-description {
+            display: none;
+        }
+
+        .guide-card-header {
+            position: relative;
+            z-index: 30;
+        }
+
+        .guide-card-hover-panel {
+            position: absolute;
+            inset: -1px;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            border: 1px solid rgb(165 180 252);
+            background: rgba(255, 255, 255, 0.97);
+            box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16);
+            padding: 3rem 0.75rem 0.75rem;
+        }
+
+        .guide-card-hover-description {
+            font-size: 0.75rem;
+            line-height: 1.1rem;
+            color: rgb(71 85 105);
+        }
+
+        @media (hover: hover) and (pointer: fine) {
+            .guide-card-hover-panel {
+                opacity: 0;
+                pointer-events: none;
+                transform: translateY(6px) scale(0.98);
+                transition: opacity 140ms ease, transform 140ms ease;
+            }
+
+            .guide-program-card.hover-active .guide-card-hover-panel,
+            .guide-program-card:hover .guide-card-hover-panel,
+            .guide-program-card:focus-within .guide-card-hover-panel {
+                opacity: 1;
+                pointer-events: auto;
+                transform: translateY(0);
+            }
+        }
+
+        @media (hover: none), (pointer: coarse) {
+            .guide-card-hover-panel {
+                position: static;
+                inset: auto;
+                border: 0;
+                background: transparent;
+                box-shadow: none;
+                padding: 0.5rem 0 0;
+                margin-top: 0.25rem;
+            }
+
+            .guide-card-hover-description {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .guide-channel-column {
+                width: 180px;
+                min-width: 180px;
+            }
+        }
     </style>
     <script>
         tailwind.config = {
@@ -209,11 +327,16 @@
         
         <div class="bg-white rounded-lg shadow-md overflow-hidden">
             <div class="flex justify-between items-center px-6 py-4 border-b">
-                <h2 class="text-lg font-semibold text-gray-800">検索結果</h2>
+                <div class="flex items-center gap-3">
+                    <h2 class="text-lg font-semibold text-gray-800">検索結果</h2>
+                    <button id="viewToggleButton" type="button" class="px-3 py-1.5 bg-slate-800 text-white text-sm font-medium rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 disabled:bg-slate-400 disabled:cursor-not-allowed" disabled>
+                        番組表ビューへ切り替え
+                    </button>
+                </div>
                 <div id="resultsCount" class="text-sm text-gray-600"></div>
             </div>
             
-            <div class="overflow-x-auto">
+            <div id="listView" class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
@@ -226,11 +349,39 @@
                     </tbody>
                 </table>
             </div>
+
+        </div>
+    </div>
+
+    <div id="guideView" class="hidden fixed inset-0 z-40 bg-slate-100">
+        <div class="flex h-full flex-col">
+            <div class="border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <div class="text-lg font-semibold text-slate-900">番組表ビュー</div>
+                        <div id="guideSummary" class="text-sm text-slate-600">検索結果を番組表形式で表示します</div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div id="guideResultsCount" class="text-sm text-slate-500"></div>
+                        <button id="guideCloseButton" type="button" class="px-3 py-1.5 bg-slate-800 text-white text-sm font-medium rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500">
+                            一覧へ戻る
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="border-b border-slate-200 bg-white px-4 py-2">
+                <div id="guideTopScrollbar" class="overflow-x-auto overflow-y-hidden">
+                    <div id="guideTopScrollbarInner" class="h-4"></div>
+                </div>
+            </div>
+            <div id="guideMainScroll" class="min-h-0 flex-1 overflow-auto">
+                <div id="guideCanvas" class="min-w-full px-4 pb-6"></div>
+            </div>
         </div>
     </div>
 
     <!-- 自動予約作成モーダル -->
-    <div id="autoReservationModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
+    <div id="autoReservationModal" class="fixed inset-0 z-60 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
         <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
             <div class="mt-3">
                 <h3 class="text-lg font-medium text-gray-900 text-center" id="modalTitle">自動予約ルールを作成</h3>
@@ -303,7 +454,54 @@
     </div>
 
     <!-- 予約モーダル -->
-    <div id="reservationModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
+    <div id="programDetailModal" class="fixed inset-0 z-50 hidden bg-gray-900 bg-opacity-55 overflow-y-auto">
+        <div class="min-h-full px-4 py-8 sm:px-6">
+            <div class="mx-auto max-w-2xl border border-slate-200 bg-white shadow-xl">
+                <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">Program Detail</p>
+                        <h3 id="programDetailTitle" class="mt-1 text-lg font-semibold text-slate-900">番組詳細</h3>
+                    </div>
+                    <button type="button" id="programDetailCloseButton" class="px-3 py-1.5 bg-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-300 focus:outline-none">
+                        閉じる
+                    </button>
+                </div>
+                <div class="space-y-4 px-5 py-5">
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                            <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">放送局</div>
+                            <div id="programDetailStation" class="mt-1 text-sm text-slate-900"></div>
+                        </div>
+                        <div>
+                            <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">放送時間</div>
+                            <div id="programDetailTime" class="mt-1 text-sm text-slate-900"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">番組ID</div>
+                        <div id="programDetailId" class="mt-1 text-sm text-slate-900"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">説明</div>
+                        <div id="programDetailDescription" class="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700"></div>
+                    </div>
+                    <div class="flex flex-wrap gap-2 border-t border-slate-200 pt-4">
+                        <button type="button" id="programDetailReserveButton" class="px-4 py-2 bg-red-600 text-white text-sm font-medium hover:bg-red-700 focus:outline-none">
+                            予約
+                        </button>
+                        <button type="button" id="programDetailAutoReserveButton" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 focus:outline-none">
+                            自動予約
+                        </button>
+                        <a id="programDetailIEPGLink" href="#" target="_blank" rel="noopener" class="px-4 py-2 bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 focus:outline-none">
+                            IEPG を開く
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="reservationModal" class="fixed inset-0 z-60 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
         <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
             <div class="mt-3">
                 <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
@@ -336,6 +534,11 @@
     </div>
 
     <script>
+        let currentSearchResults = [];
+        let currentResultsView = 'list';
+        let isSyncingGuideScroll = false;
+        let currentProgramDetailData = null;
+
         // サービス一覧の取得と表示
         async function loadServices() {
             try {
@@ -703,6 +906,10 @@
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('resultsBody').innerHTML = '';
             document.getElementById('resultsCount').textContent = '';
+            document.getElementById('guideCanvas').innerHTML = '';
+            document.getElementById('guideSummary').textContent = '検索結果を読み込み中です';
+            document.getElementById('guideResultsCount').textContent = '';
+            document.getElementById('viewToggleButton').disabled = true;
             
             // APIリクエスト
             fetch('/search?' + params.toString())
@@ -717,95 +924,519 @@
                     
                     // 結果件数の表示
                     document.getElementById('resultsCount').textContent = `${data.length}件の番組が見つかりました`;
-                    
-                    // テーブルに結果を追加
-                    const tbody = document.getElementById('resultsBody');
-                    tbody.innerHTML = '';
-                    
-                    data.forEach(program => {
-                        const row = document.createElement('tr');
-                        
-                        // 日時のフォーマット
-                        const startDate = new Date(program.startAt);
-                        const endDate = new Date(program.startAt + program.duration);
-                        const formatDate = date => {
-                            return date.toLocaleDateString('ja-JP') + ' ' + 
-                                   date.toLocaleTimeString('ja-JP');
-                        };
-                        
-                        // 2行で構成するために親要素となる DocumentFragment を作成
-                        const fragment = document.createDocumentFragment();
-                        
-                        // 1行目 - ID列とタイトル情報
-                        const row1 = document.createElement('tr');
-                        row1.innerHTML = `
-                            <td class="hidden sm:table-cell px-6 py-2 align-top whitespace-nowrap text-sm text-gray-900" rowspan="2">
-                                <a href="/program/${program.id}" class="text-indigo-600 hover:text-indigo-900 hover:underline" target="_blank">${program.id}</a>
-                            </td>
-                            <td class="px-3 py-2 text-sm" colspan="2">
-                                <div class="sm:hidden mb-2">
-                                    <a href="/program/${program.id}" class="text-indigo-600 hover:text-indigo-900 hover:underline text-xs" target="_blank">ID: ${program.id}</a>
-                                </div>
-                                <div class="flex flex-wrap gap-2 sm:gap-3 items-start sm:items-center">
-                                    <div class="w-full sm:w-40 font-medium text-gray-700 break-words" title="${escapeHtml(program.stationName || `Service ${program.serviceId}`)}">
-                                        ${escapeHtml(program.stationName || `Service ${program.serviceId}`)}
-                                    </div>
-                                    <div class="w-full sm:flex-1 font-medium text-gray-900 break-words" title="${escapeHtml(program.name)}">
-                                        ${escapeHtml(program.name)}
-                                    </div>
-                                    <div class="w-full sm:w-auto whitespace-nowrap text-sm text-gray-600">
-                                        ${formatDate(startDate)} 〜 ${formatDate(endDate)}
-                                    </div>
-                                    <div class="w-full sm:w-auto flex gap-2 mt-2 sm:mt-0">
-                                        <button class="px-3 py-1 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700 focus:outline-none reservation-btn" 
-                                        data-program-id="${program.id}" 
-                                        data-program-name="${escapeHtml(program.name)}">
-                                            予約
-                                        </button>
-                                        <button class="px-3 py-1 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 focus:outline-none auto-reservation-btn" 
-                                        data-program='${JSON.stringify({
-                                            id: program.id,
-                                            name: program.name,
-                                            description: program.description,
-                                            serviceId: program.serviceId,
-                                            stationName: program.stationName
-                                        })}'>
-                                            自動予約
-                                        </button>
-                                    </div>
-                                </div>
-                            </td>
-                        `;
-                        fragment.appendChild(row1);
-                        
-                        // 2行目 - 説明文
-                        const row2 = document.createElement('tr');
-                        row2.className = "bg-gray-50";
-                        row2.innerHTML = `
-                            <td class="px-3 py-2 text-sm text-gray-500">
-                                <div class="break-words">
-                                    ${escapeHtml(program.description || '説明なし')}
-                                </div>
-                            </td>
-                        `;
-                        fragment.appendChild(row2);
-                        
-                        // fragmentを直接tbodyに追加
-                        tbody.appendChild(fragment);
-                    });
-                    
-                    if (data.length === 0) {
-                        const emptyRow = document.createElement('tr');
-                        emptyRow.innerHTML = '<td colspan="2" class="px-6 py-4 text-sm text-center text-gray-500">該当する番組は見つかりませんでした</td>';
-                        tbody.appendChild(emptyRow);
-                    }
+                    document.getElementById('guideResultsCount').textContent = `${data.length}件`;
+                    currentSearchResults = data;
+                    renderResults();
                 })
                 .catch(error => {
                     document.getElementById('loading').classList.add('hidden');
                     document.getElementById('resultsCount').textContent = 'エラー: ' + error.message;
+                    document.getElementById('guideResultsCount').textContent = '';
+                    currentSearchResults = [];
+                    renderResultsList([]);
+                    updateResultsViewMode();
+                    document.getElementById('guideCanvas').innerHTML = '';
+                    document.getElementById('guideSummary').textContent = '検索結果の読み込みに失敗しました';
                     console.error('検索エラー:', error);
                 });
         });
+
+        document.getElementById('viewToggleButton').addEventListener('click', toggleResultsView);
+        document.getElementById('guideCloseButton').addEventListener('click', closeGuideView);
+        document.getElementById('programDetailCloseButton').addEventListener('click', closeProgramDetailModal);
+        document.getElementById('programDetailReserveButton').addEventListener('click', handleProgramDetailReserve);
+        document.getElementById('programDetailAutoReserveButton').addEventListener('click', handleProgramDetailAutoReserve);
+        document.getElementById('guideTopScrollbar').addEventListener('scroll', syncGuideScrollFromTopBar);
+        document.getElementById('guideMainScroll').addEventListener('scroll', syncGuideScrollFromMain);
+        window.addEventListener('resize', syncGuideScrollbarWidth);
+
+        function toggleResultsView() {
+            if (currentSearchResults.length === 0) {
+                return;
+            }
+
+            currentResultsView = currentResultsView === 'list' ? 'guide' : 'list';
+            renderResults();
+        }
+
+        function renderResults() {
+            renderResultsList(currentSearchResults);
+            renderGuideView(currentSearchResults);
+            updateResultsViewMode();
+        }
+
+        function closeGuideView() {
+            if (currentResultsView !== 'guide') {
+                return;
+            }
+
+            currentResultsView = 'list';
+            updateResultsViewMode();
+        }
+
+        function renderResultsList(programs) {
+            const tbody = document.getElementById('resultsBody');
+            tbody.innerHTML = '';
+
+            if (programs.length === 0) {
+                const emptyRow = document.createElement('tr');
+                emptyRow.innerHTML = '<td colspan="2" class="px-6 py-4 text-sm text-center text-gray-500">該当する番組は見つかりませんでした</td>';
+                tbody.appendChild(emptyRow);
+                document.getElementById('viewToggleButton').disabled = true;
+                return;
+            }
+
+            document.getElementById('viewToggleButton').disabled = false;
+
+            programs.forEach(program => {
+                const startDate = new Date(program.startAt);
+                const endDate = new Date(program.startAt + program.duration);
+                const fragment = document.createDocumentFragment();
+
+                const row1 = document.createElement('tr');
+                row1.innerHTML = `
+                    <td class="hidden sm:table-cell px-6 py-2 align-top whitespace-nowrap text-sm text-gray-900" rowspan="2">
+                        <a href="/program/${program.id}" class="text-indigo-600 hover:text-indigo-900 hover:underline" target="_blank">${program.id}</a>
+                    </td>
+                    <td class="px-3 py-2 text-sm" colspan="2">
+                        <div class="sm:hidden mb-2">
+                            <a href="/program/${program.id}" class="text-indigo-600 hover:text-indigo-900 hover:underline text-xs" target="_blank">ID: ${program.id}</a>
+                        </div>
+                        <div class="flex flex-wrap gap-2 sm:gap-3 items-start sm:items-center">
+                            <div class="w-full sm:w-40 font-medium text-gray-700 break-words" title="${escapeHtml(program.stationName || `Service ${program.serviceId}`)}">
+                                ${escapeHtml(program.stationName || `Service ${program.serviceId}`)}
+                            </div>
+                            <div class="w-full sm:flex-1 font-medium text-gray-900 break-words" title="${escapeHtml(program.name)}">
+                                ${escapeHtml(program.name)}
+                            </div>
+                            <div class="w-full sm:w-auto whitespace-nowrap text-sm text-gray-600">
+                                ${formatProgramDateTime(startDate)} 〜 ${formatProgramDateTime(endDate)}
+                            </div>
+                            <div class="w-full sm:w-auto flex gap-2 mt-2 sm:mt-0">
+                                ${buildProgramActionButtons(program)}
+                            </div>
+                        </div>
+                    </td>
+                `;
+                fragment.appendChild(row1);
+
+                const row2 = document.createElement('tr');
+                row2.className = "bg-gray-50";
+                row2.innerHTML = `
+                    <td class="px-3 py-2 text-sm text-gray-500">
+                        <div class="break-words">
+                            ${escapeHtml(program.description || '説明なし')}
+                        </div>
+                    </td>
+                `;
+                fragment.appendChild(row2);
+                tbody.appendChild(fragment);
+            });
+        }
+
+        function renderGuideView(programs) {
+            const guideCanvas = document.getElementById('guideCanvas');
+            const guideSummary = document.getElementById('guideSummary');
+            guideCanvas.innerHTML = '';
+            guideCanvas.classList.remove('guide-hover-locked');
+
+            if (programs.length === 0) {
+                guideSummary.textContent = '検索結果がありません';
+                syncGuideScrollbarWidth();
+                return;
+            }
+
+            const channels = buildGuideChannels(programs);
+            const timeRange = calculateGuideTimeRange(programs);
+            const pxPerMinute = 3.2;
+            const totalMinutes = Math.max(30, Math.ceil((timeRange.end - timeRange.start) / 60000));
+            const timelineHeight = Math.max(480, Math.ceil(totalMinutes * pxPerMinute));
+            const timeTicks = buildTimeTicks(timeRange.start, timeRange.end, pxPerMinute);
+            const columnsHtml = channels.map(channel => buildGuideChannelColumn(channel, timeRange.start, pxPerMinute, timelineHeight)).join('');
+
+            guideSummary.textContent = `${channels.length}チャンネル / ${formatGuideHeaderDate(timeRange.start)} ${formatGuideHeaderTime(timeRange.start)} 〜 ${formatGuideHeaderDate(timeRange.end)} ${formatGuideHeaderTime(timeRange.end)}`;
+
+            guideCanvas.innerHTML = `
+                <div class="flex min-w-max">
+                    <div class="guide-time-column shrink-0 border-r border-slate-200 bg-white sticky left-0 z-20">
+                        <div class="h-16 border-b border-slate-200 bg-slate-100"></div>
+                        <div class="relative guide-grid" style="height: ${timelineHeight}px;">
+                            ${timeTicks.map(tick => `
+                                <div class="absolute inset-x-0 border-t border-slate-200 text-[11px] text-slate-500 bg-white/90 px-2 -translate-y-1/2" style="top: ${tick.offset}px;">
+                                    ${tick.label}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="flex min-w-max">
+                        ${columnsHtml}
+                    </div>
+                </div>
+            `;
+
+            setupGuideCardInteractions();
+            requestAnimationFrame(syncGuideScrollbarWidth);
+        }
+
+        function setupGuideCardInteractions() {
+            if (!supportsGuideHoverLock()) {
+                document.querySelectorAll('[data-guide-card]').forEach(card => {
+                    card.addEventListener('click', handleGuideCardClick);
+                    card.addEventListener('keydown', handleGuideCardKeydown);
+                });
+                return;
+            }
+
+            document.querySelectorAll('[data-guide-card]').forEach(card => {
+                card.addEventListener('mouseenter', activateGuideCardHover);
+                card.addEventListener('mouseleave', deactivateGuideCardHover);
+                card.addEventListener('click', handleGuideCardClick);
+                card.addEventListener('keydown', handleGuideCardKeydown);
+            });
+        }
+
+        function activateGuideCardHover(event) {
+            if (!supportsGuideHoverLock()) {
+                return;
+            }
+
+            const guideCanvas = document.getElementById('guideCanvas');
+            guideCanvas.querySelectorAll('.guide-program-card.hover-active').forEach(card => {
+                card.classList.remove('hover-active');
+            });
+            event.currentTarget.classList.add('hover-active');
+            guideCanvas.classList.add('guide-hover-locked');
+        }
+
+        function deactivateGuideCardHover(event) {
+            if (!supportsGuideHoverLock()) {
+                return;
+            }
+
+            event.currentTarget.classList.remove('hover-active');
+            document.getElementById('guideCanvas').classList.remove('guide-hover-locked');
+        }
+
+        function handleGuideCardClick(event) {
+            openGuideProgramDetails(JSON.parse(decodeURIComponent(event.currentTarget.dataset.program)));
+        }
+
+        function handleGuideCardKeydown(event) {
+            if (event.key !== 'Enter' && event.key !== ' ') {
+                return;
+            }
+
+            event.preventDefault();
+            openGuideProgramDetails(JSON.parse(decodeURIComponent(event.currentTarget.dataset.program)));
+        }
+
+        function openGuideProgramDetails(programData) {
+            if (!programData) {
+                return;
+            }
+
+            currentProgramDetailData = programData;
+            const startAt = new Date(programData.startAt);
+            const endAt = new Date(programData.startAt + programData.duration);
+
+            document.getElementById('programDetailTitle').textContent = programData.name || '番組詳細';
+            document.getElementById('programDetailStation').textContent = [
+                programData.stationName || `Service ${programData.serviceId}`,
+                [programData.channelType, programData.channelNumber].filter(Boolean).join(' ')
+            ].filter(Boolean).join(' / ');
+            document.getElementById('programDetailTime').textContent = `${formatProgramDateTime(startAt)} 〜 ${formatProgramDateTime(endAt)}`;
+            document.getElementById('programDetailId').textContent = String(programData.id);
+            document.getElementById('programDetailDescription').textContent = programData.description || '説明なし';
+            document.getElementById('programDetailIEPGLink').href = `/program/${programData.id}`;
+            document.getElementById('programDetailModal').classList.remove('hidden');
+        }
+
+        function closeProgramDetailModal() {
+            document.getElementById('programDetailModal').classList.add('hidden');
+            currentProgramDetailData = null;
+        }
+
+        function handleProgramDetailReserve() {
+            if (!currentProgramDetailData) {
+                return;
+            }
+
+            const programData = currentProgramDetailData;
+            closeProgramDetailModal();
+            openReservationModal(String(programData.id), programData.name);
+        }
+
+        function handleProgramDetailAutoReserve() {
+            if (!currentProgramDetailData) {
+                return;
+            }
+
+            const programData = currentProgramDetailData;
+            closeProgramDetailModal();
+            openAutoReservationModal(programData);
+        }
+
+        function supportsGuideHoverLock() {
+            return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+        }
+
+        function updateResultsViewMode() {
+            const listView = document.getElementById('listView');
+            const guideView = document.getElementById('guideView');
+            const toggleButton = document.getElementById('viewToggleButton');
+            const guideMainScroll = document.getElementById('guideMainScroll');
+
+            if (currentResultsView === 'guide' && currentSearchResults.length > 0) {
+                listView.classList.add('hidden');
+                guideView.classList.remove('hidden');
+                toggleButton.textContent = '一覧ビューへ切り替え';
+                document.body.classList.add('overflow-hidden');
+                guideMainScroll.scrollTop = 0;
+                requestAnimationFrame(syncGuideScrollbarWidth);
+                return;
+            }
+
+            listView.classList.remove('hidden');
+            guideView.classList.add('hidden');
+            toggleButton.textContent = '番組表ビューへ切り替え';
+            currentResultsView = 'list';
+            document.body.classList.remove('overflow-hidden');
+        }
+
+        function syncGuideScrollbarWidth() {
+            const guideCanvas = document.getElementById('guideCanvas');
+            const guideMainScroll = document.getElementById('guideMainScroll');
+            const guideTopScrollbarInner = document.getElementById('guideTopScrollbarInner');
+            const contentWidth = Math.max(guideCanvas.scrollWidth, guideMainScroll.clientWidth);
+
+            guideTopScrollbarInner.style.width = `${contentWidth}px`;
+
+            if (!isSyncingGuideScroll) {
+                document.getElementById('guideTopScrollbar').scrollLeft = guideMainScroll.scrollLeft;
+            }
+        }
+
+        function syncGuideScrollFromTopBar(event) {
+            if (isSyncingGuideScroll) {
+                return;
+            }
+
+            isSyncingGuideScroll = true;
+            document.getElementById('guideMainScroll').scrollLeft = event.target.scrollLeft;
+            requestAnimationFrame(() => {
+                isSyncingGuideScroll = false;
+            });
+        }
+
+        function syncGuideScrollFromMain(event) {
+            if (isSyncingGuideScroll) {
+                return;
+            }
+
+            isSyncingGuideScroll = true;
+            document.getElementById('guideTopScrollbar').scrollLeft = event.target.scrollLeft;
+            requestAnimationFrame(() => {
+                isSyncingGuideScroll = false;
+            });
+        }
+
+        function buildGuideChannels(programs) {
+            const channelMap = new Map();
+
+            programs.forEach(program => {
+                const key = `${program.serviceId}:${program.stationName || ''}`;
+                if (!channelMap.has(key)) {
+                    channelMap.set(key, {
+                        key,
+                        serviceId: program.serviceId,
+                        stationName: program.stationName || `Service ${program.serviceId}`,
+                        channelType: program.channelType || '',
+                        channelNumber: program.channelNumber || '',
+                        remoteControlKey: Number(program.remoteControlKey || 0),
+                        programs: [],
+                    });
+                }
+
+                channelMap.get(key).programs.push(program);
+            });
+
+            const channels = Array.from(channelMap.values());
+            channels.forEach(channel => {
+                channel.programs.sort((a, b) => a.startAt - b.startAt);
+            });
+
+            channels.sort((a, b) => {
+                const typeOrder = compareChannelType(a.channelType, b.channelType);
+                if (typeOrder !== 0) {
+                    return typeOrder;
+                }
+
+                if (a.remoteControlKey !== b.remoteControlKey) {
+                    if (a.remoteControlKey === 0) return 1;
+                    if (b.remoteControlKey === 0) return -1;
+                    return a.remoteControlKey - b.remoteControlKey;
+                }
+
+                const numberOrder = compareNumericStrings(a.channelNumber, b.channelNumber);
+                if (numberOrder !== 0) {
+                    return numberOrder;
+                }
+
+                return a.stationName.localeCompare(b.stationName, 'ja');
+            });
+
+            return channels;
+        }
+
+        function calculateGuideTimeRange(programs) {
+            const minStart = Math.min(...programs.map(program => program.startAt));
+            const maxEnd = Math.max(...programs.map(program => program.startAt + program.duration));
+            return {
+                start: roundDateDown(minStart, 30),
+                end: roundDateUp(maxEnd, 30),
+            };
+        }
+
+        function buildTimeTicks(start, end, pxPerMinute) {
+            const ticks = [];
+            for (let timestamp = start; timestamp <= end; timestamp += 30 * 60 * 1000) {
+                ticks.push({
+                    label: formatGuideHeaderTime(timestamp),
+                    offset: Math.round(((timestamp - start) / 60000) * pxPerMinute),
+                });
+            }
+            return ticks;
+        }
+
+        function buildGuideChannelColumn(channel, guideStart, pxPerMinute, timelineHeight) {
+            const stationMeta = [channel.channelType, channel.channelNumber].filter(Boolean).join(' ');
+            const cards = channel.programs.map(program => {
+                const startOffsetMinutes = Math.max(0, (program.startAt - guideStart) / 60000);
+                const cardTop = Math.round(startOffsetMinutes * pxPerMinute);
+                const cardHeight = Math.max(56, Math.round((program.duration / 60000) * pxPerMinute));
+                const endAt = program.startAt + program.duration;
+                const cardDensity = classifyGuideCardDensity(cardHeight);
+                const descriptionHtml = cardDensity === 'large'
+                    ? `<p class="guide-card-description mt-2 text-xs text-slate-600 line-clamp-3">${escapeHtml(program.description || '説明なし')}</p>`
+                    : '';
+                const iepgLabel = cardDensity === 'compact' ? '詳細' : 'IEPG';
+
+                return `
+                    <article data-guide-card data-program="${encodeURIComponent(JSON.stringify(program))}" tabindex="0" role="button" aria-label="${escapeHtml(program.name)} の詳細を開く" class="guide-program-card ${cardDensity} absolute left-2 right-2 border border-indigo-200 bg-indigo-50 px-3 py-2 shadow-sm overflow-visible" style="top: ${cardTop}px; height: ${cardHeight}px;">
+                        <div class="guide-card-header flex items-start justify-between gap-2">
+                            <div class="min-w-0 flex-1">
+                                <div class="guide-card-time text-[11px] font-semibold text-indigo-700 whitespace-nowrap">
+                                    ${formatGuideHeaderTime(program.startAt)} - ${formatGuideHeaderTime(endAt)}
+                                </div>
+                                <h3 class="guide-card-title mt-1 text-sm font-semibold text-slate-900 line-clamp-2 break-words">
+                                    ${escapeHtml(program.name)}
+                                </h3>
+                            </div>
+                            <span class="shrink-0 text-[11px] font-medium text-indigo-600">${iepgLabel}</span>
+                        </div>
+                        ${descriptionHtml}
+                        <div class="guide-card-hover-panel">
+                            <div class="guide-card-hover-description line-clamp-4">
+                                ${escapeHtml(program.description || '説明なし')}
+                            </div>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+
+            return `
+                <section class="guide-channel-column shrink-0 border-r border-slate-200 bg-white">
+                    <div class="sticky top-0 z-10 h-16 border-b border-slate-200 bg-slate-100 px-3 py-2">
+                        <div class="text-sm font-semibold text-slate-900 line-clamp-2">${escapeHtml(channel.stationName)}</div>
+                        <div class="mt-1 text-xs text-slate-500">${escapeHtml(stationMeta || `Service ${channel.serviceId}`)}</div>
+                    </div>
+                    <div class="relative guide-grid" style="height: ${timelineHeight}px;">
+                        ${cards}
+                    </div>
+                </section>
+            `;
+        }
+
+        function buildProgramActionButtons(program, extraClass = '') {
+            const encodedProgram = encodeURIComponent(JSON.stringify({
+                id: program.id,
+                name: program.name,
+                description: program.description,
+                serviceId: program.serviceId,
+                stationName: program.stationName
+            }));
+
+            return `
+                <button class="reservation-btn bg-red-600 text-white font-medium rounded hover:bg-red-700 focus:outline-none px-3 py-1 ${extraClass}" data-program-id="${program.id}" data-program-name="${escapeHtml(program.name)}">
+                    予約
+                </button>
+                <button class="auto-reservation-btn bg-blue-600 text-white font-medium rounded hover:bg-blue-700 focus:outline-none px-3 py-1 ${extraClass}" data-program="${encodedProgram}">
+                    自動予約
+                </button>
+            `;
+        }
+
+        function classifyGuideCardDensity(cardHeight) {
+            if (cardHeight <= 72) {
+                return 'compact';
+            }
+            if (cardHeight <= 116) {
+                return 'medium';
+            }
+            return 'large';
+        }
+
+        function formatProgramDateTime(date) {
+            return date.toLocaleDateString('ja-JP') + ' ' + date.toLocaleTimeString('ja-JP', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function formatGuideHeaderDate(timestamp) {
+            return new Date(timestamp).toLocaleDateString('ja-JP', {
+                month: 'numeric',
+                day: 'numeric',
+                weekday: 'short'
+            });
+        }
+
+        function formatGuideHeaderTime(timestamp) {
+            return new Date(timestamp).toLocaleTimeString('ja-JP', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function roundDateDown(timestamp, minutes) {
+            const unit = minutes * 60 * 1000;
+            return Math.floor(timestamp / unit) * unit;
+        }
+
+        function roundDateUp(timestamp, minutes) {
+            const unit = minutes * 60 * 1000;
+            return Math.ceil(timestamp / unit) * unit;
+        }
+
+        function compareChannelType(left, right) {
+            const typeOrder = { GR: 1, BS: 2, CS: 3 };
+            return (typeOrder[left] || 99) - (typeOrder[right] || 99);
+        }
+
+        function compareNumericStrings(left, right) {
+            if (!left && !right) return 0;
+            if (!left) return 1;
+            if (!right) return -1;
+
+            const leftNumber = parseInt(String(left).replace(/\D/g, ''), 10);
+            const rightNumber = parseInt(String(right).replace(/\D/g, ''), 10);
+
+            if (!Number.isNaN(leftNumber) && !Number.isNaN(rightNumber) && leftNumber !== rightNumber) {
+                return leftNumber - rightNumber;
+            }
+
+            return String(left).localeCompare(String(right), 'ja');
+        }
         
         // HTMLエスケープ関数
         function escapeHtml(unsafe) {
@@ -830,7 +1461,7 @@
                 // 予約モーダルを開く
                 openReservationModal(programId, programName);
             } else if (e.target.classList.contains('auto-reservation-btn')) {
-                const programData = JSON.parse(e.target.dataset.program);
+                const programData = JSON.parse(decodeURIComponent(e.target.dataset.program));
                 openAutoReservationModal(programData);
             }
         });
@@ -1133,6 +1764,14 @@
         // ESCキーでモーダルを閉じる
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
+                if (!document.getElementById('programDetailModal').classList.contains('hidden')) {
+                    closeProgramDetailModal();
+                    return;
+                }
+                if (currentResultsView === 'guide') {
+                    closeGuideView();
+                    return;
+                }
                 closeAutoReservationModal();
             }
         });
@@ -1141,6 +1780,12 @@
         document.getElementById('autoReservationModal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeAutoReservationModal();
+            }
+        });
+
+        document.getElementById('programDetailModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeProgramDetailModal();
             }
         });
     </script>
